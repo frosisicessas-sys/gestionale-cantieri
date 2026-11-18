@@ -983,7 +983,7 @@
                 optionsCausali += '</optgroup>';
 
                let row = document.createElement('div');
-row.className = "flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 row-dipendente-ore";
+row.className = "flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 row-dipendente-ore w-full overflow-hidden";
                 row.dataset.dipendente = dep;
 
                 let disabledClass = spuntato ? '' : 'opacity-40 pointer-events-none';
