@@ -1,0 +1,2665 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gestione Cantieri, Presenze & Materiali</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @media (max-width: 768px) {
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen pb-24 md:pb-8 md:p-6 font-sans text-slate-800">
+
+    <!-- BANNER NOTIFICA SYNC GOOGLE DRIVE -->
+    <div id="toastCloud" class="fixed top-4 right-4 z-50 hidden bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2.5 transition-all">
+        <span id="toastCloudIcon">☁️</span>
+        <span id="toastCloudText">Sincronizzazione con Google Drive...</span>
+    </div>
+
+    <div class="max-w-7xl mx-auto bg-white md:rounded-2xl shadow-xl overflow-hidden border-b md:border border-slate-200">
+        <!-- HEADER COMPATTO MOBILE-FIRST -->
+        <div class="bg-gradient-to-r from-slate-800 to-blue-900 text-white p-4 px-5 md:p-6 md:px-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sticky top-0 z-30 shadow-md">
+            <div>
+                <h1 class="text-lg md:text-2xl font-bold tracking-tight flex items-center gap-2">
+                    <span>🏗️</span> <span>Gestionale Cantieri</span>
+                </h1>
+                <p class="text-slate-300 text-xs md:text-sm hidden sm:block">Controllo ore, automezzi, costi materiali e archivio automatico Google Drive</p>
+            </div>
+            <div class="flex items-center justify-between w-full sm:w-auto gap-2">
+                <span id="statoCloudBadge" class="bg-emerald-900/80 text-emerald-200 px-2.5 py-1 rounded-full border border-emerald-500/40 text-[11px] font-semibold">☁️ Drive Attivo</span>
+                <span id="dataOdiernaBadge" class="bg-blue-800/80 px-2.5 py-1 rounded-full border border-blue-500/40 text-[11px] md:text-xs font-medium capitalize"></span>
+                <button type="button" onclick="cambiaSchedaMobile('anagrafiche')" class="md:hidden bg-white/15 hover:bg-white/25 text-white px-2.5 py-1 rounded-lg text-xs font-semibold border border-white/20">
+                    ⚙️ Database
+                </button>
+            </div>
+        </div>
+
+        <!-- BARRA SCHEDE DESKTOP -->
+        <div class="hidden md:flex bg-slate-100 border-b border-slate-200 px-8 pt-3 gap-2">
+            <button type="button" onclick="cambiaSchedaMobile('tutto')" id="desk-tab-tutto" class="desk-tab px-4 py-2.5 rounded-t-xl text-xs font-bold bg-white text-blue-900 border-t border-x border-slate-200 shadow-sm">🖥️ Vista Completa (Tutto)</button>
+            <button type="button" onclick="cambiaSchedaMobile('rapportino')" id="desk-tab-rapportino" class="desk-tab px-4 py-2.5 rounded-t-xl text-xs font-bold text-slate-600 hover:bg-white/60">📝 Inserimento Ore</button>
+            <button type="button" onclick="cambiaSchedaMobile('materiali')" id="desk-tab-materiali" class="desk-tab px-4 py-2.5 rounded-t-xl text-xs font-bold text-slate-600 hover:bg-white/60">🧱 Costi Materiali</button>
+            <button type="button" onclick="cambiaSchedaMobile('consuntivo')" id="desk-tab-consuntivo" class="desk-tab px-4 py-2.5 rounded-t-xl text-xs font-bold text-slate-600 hover:bg-white/60">📑 Consuntivo Lavori</button>
+            <button type="button" onclick="cambiaSchedaMobile('storico')" id="desk-tab-storico" class="desk-tab px-4 py-2.5 rounded-t-xl text-xs font-bold text-slate-600 hover:bg-white/60">📋 Storico & Report PDF</button>
+            <button type="button" onclick="cambiaSchedaMobile('anagrafiche')" id="desk-tab-anagrafiche" class="desk-tab px-4 py-2.5 rounded-t-xl text-xs font-bold text-slate-600 hover:bg-white/60">⚙️ Anagrafiche</button>
+        </div>
+
+        <div class="p-4 md:p-8 space-y-6 md:space-y-8">
+            
+            <!-- SEZIONE 1: DATABASE SEPARATI (ANAGRAFICHE) -->
+            <div id="sec-anagrafiche" class="sezione-app grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div class="col-span-full md:hidden flex justify-between items-center border-b border-slate-200 pb-2">
+                    <h2 class="text-sm font-bold text-slate-800 uppercase">⚙️ Gestione Database e Anagrafiche</h2>
+                </div>
+
+                <!-- Dipendenti -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">👤 Dipendenti</label>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="nuovoDipendente" placeholder="Nome Cognome" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <button type="button" onclick="aggiungiDipendente()" class="bg-blue-600 text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 active:scale-95 transition">Add</button>
+                    </div>
+                    <div id="listaAnagraficaDipendenti" class="border border-slate-100 bg-slate-50 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1.5 text-xs flex-1"></div>
+                </div>
+
+                <!-- Database Cantieri -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">🏗️ Database Cantieri</label>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="nuovoCantiere" placeholder="Es. Cantiere Alpha" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        <input type="color" id="coloreCantiere" value="#D9E1F2" title="Colore Cantiere" class="w-10 h-10 border border-slate-300 rounded-lg cursor-pointer p-0.5 bg-white">
+                        <button type="button" onclick="aggiungiCantiere()" class="bg-emerald-600 text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700 active:scale-95 transition">Add</button>
+                    </div>
+                    <div id="listaAnagraficaCantieri" class="border border-slate-100 bg-slate-50 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1.5 text-xs flex-1"></div>
+                </div>
+
+                <!-- Database Causali -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">📋 Database Causali</label>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="nuovaCausale" placeholder="Es. Malattia, CIG" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <input type="color" id="coloreCausale" value="#FFF2CC" title="Colore Causale" class="w-10 h-10 border border-slate-300 rounded-lg cursor-pointer p-0.5 bg-white">
+                        <button type="button" onclick="aggiungiCausale()" class="bg-indigo-600 text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 active:scale-95 transition">Add</button>
+                    </div>
+                    <div id="listaAnagraficaCausali" class="border border-slate-100 bg-slate-50 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1.5 text-xs flex-1"></div>
+                </div>
+
+                <!-- Automezzi -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">🚚 Automezzi</label>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="nuovoAutomezzo" placeholder="Targa o Mezzo" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                        <button type="button" onclick="aggiungiAutomezzo()" class="bg-amber-600 text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-amber-700 active:scale-95 transition">Add</button>
+                    </div>
+                    <div id="listaAnagraficaAutomezzi" class="border border-slate-100 bg-slate-50 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1.5 text-xs flex-1"></div>
+                </div>
+            </div>
+
+            <!-- SEZIONE 2: INSERIMENTO GIORNALIERO PER SINGOLO CANTIERE -->
+            <div id="sec-rapportino" class="sezione-app bg-gradient-to-br from-blue-50/80 to-indigo-50/40 p-4 md:p-6 rounded-xl border border-blue-200/80 shadow-sm">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="formTitle" class="text-base md:text-lg font-bold text-blue-900 flex items-center gap-2">📝 Rapportino Giornaliero</h2>
+                    <span id="editBadge" class="hidden bg-amber-500 text-white text-xs px-2.5 py-1 rounded-full font-semibold">Modifica</span>
+                </div>
+                <input type="hidden" id="editSessionId" value="">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Data Intervento</label>
+                        <input type="date" id="inputData" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Cantiere o Causale Principale</label>
+                        <select id="selectCantiereGlobale" onchange="aggiornaCantierePrincipaleUI(); caricaUltimoRapportinoPerCantiere(this.value);" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                            <option value="">-- Seleziona Cantiere o Causale --</option>
+                        </select>
+                        <p class="text-[11px] text-blue-700/80 mt-1">Selezionando un cantiere carica automaticamente l'ultima squadra usata.</p>
+                    </div>
+                </div>
+
+                <!-- Squadra Dipendenti con Checkbox, Ore e Causale Individuale -->
+                <div class="mb-5 bg-white p-3.5 md:p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">👥 Squadra Dipendenti, Ore & Causali</label>
+                        <div class="space-x-2">
+                            <button type="button" onclick="selezionaTuttiDipendenti(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg">Seleziona Tutti</button>
+                            <button type="button" onclick="selezionaTuttiDipendenti(false)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg">Deseleziona</button>
+                        </div>
+                    </div>
+                    <div id="containerListaDipendentiOre" class="space-y-2.5 max-h-96 overflow-y-auto pr-1"></div>
+                </div>
+
+                <!-- Automezzi con Ore di Utilizzo -->
+                <div class="mb-5">
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">🚚 Automezzi Utilizzati e Ore:</label>
+                    <div id="checkboxInserimentoAutomezzi" class="bg-white border border-slate-200 rounded-xl p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto text-sm shadow-sm"></div>
+                </div>
+
+                <!-- Note e Rilievi Misure -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Note di cantiere</label>
+                        <textarea id="inputNote" rows="2" placeholder="Eventuali annotazioni o imprevisti..." class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Rilievi Misure / Lavorazioni</label>
+                        <textarea id="inputRilievi" rows="2" placeholder="Dimensioni, quantità, pezzi montati..." class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"></textarea>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button id="btnSalva" type="button" onclick="registraPresenzeIndividuali()" class="flex-1 bg-blue-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-[0.99] transition shadow-md flex items-center justify-center gap-2">
+                        💾 Registra & Salva PDF su Drive
+                    </button>
+                    <button id="btnAnnulla" type="button" onclick="resetForm()" class="hidden bg-slate-500 text-white px-6 py-3.5 rounded-xl text-sm font-bold hover:bg-slate-600 transition shadow-md">
+                        Annulla
+                    </button>
+                </div>
+            </div>
+
+            <!-- SEZIONE COSTI MATERIALI (DDT / FATTURE) -->
+            <div id="sec-materiali" class="sezione-app bg-gradient-to-br from-emerald-50/80 to-teal-50/40 p-4 md:p-6 rounded-xl border border-emerald-200 shadow-sm">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="formMaterialiTitle" class="text-base md:text-lg font-bold text-emerald-900 flex items-center gap-2">🧱 Costi Materiali (DDT / Fatture)</h2>
+                    <span id="editMaterialeBadge" class="hidden bg-amber-500 text-white text-xs px-2.5 py-1 rounded-full font-semibold">Modifica</span>
+                </div>
+                <input type="hidden" id="editMaterialeId" value="">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Cantiere di Destinazione</label>
+                        <select id="selectCantiereMateriale" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm">
+                            <option value="">-- Seleziona Cantiere --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Fornitore</label>
+                        <input type="text" id="inputFornitoreMateriale" list="listaFornitoriSuggeriti" placeholder="Es. Edilmarket, Leroy Merlin..." class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm">
+                        <datalist id="listaFornitoriSuggeriti"></datalist>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Tipo Documento</label>
+                        <select id="tipoDocMateriale" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm">
+                            <option value="DDT">DDT (Documento di Trasporto)</option>
+                            <option value="Fattura">Fattura</option>
+                            <option value="Scontrino / Ricevuta">Scontrino / Ricevuta</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Numero DDT / Fattura</label>
+                        <input type="text" id="numeroDocMateriale" placeholder="Es. DDT 145 o Fatt. 88" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Data Documento</label>
+                        <input type="date" id="dataDocMateriale" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm">
+                    </div>
+                </div>
+
+                <!-- Voci Materiali -->
+                <div class="mb-5 bg-white p-3.5 md:p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">📦 Voci Materiali e Prezzi</label>
+                        <button type="button" onclick="aggiungiRigaMateriale()" class="w-full sm:w-auto bg-emerald-600 text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700 active:scale-95 transition shadow-sm">
+                            + Aggiungi Voce Materiale
+                        </button>
+                    </div>
+
+                    <div class="hidden md:grid md:grid-cols-12 gap-2 text-[11px] font-bold text-slate-500 uppercase px-2 mb-1">
+                        <div class="col-span-6">Descrizione Materiale / Articolo</div>
+                        <div class="col-span-2 text-center">Quantità</div>
+                        <div class="col-span-2 text-right">Prezzo Unit. (€)</div>
+                        <div class="col-span-2 text-right">Totale Riga</div>
+                    </div>
+
+                    <div id="containerVociMateriali" class="space-y-3 md:space-y-2"></div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between sm:justify-end items-center gap-4">
+                        <span class="text-xs font-bold text-slate-600 uppercase">Totale Documento:</span>
+                        <span id="totaleDocumentoLive" class="text-lg font-extrabold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200">€ 0,00</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button id="btnSalvaMateriale" type="button" onclick="registraDocumentoMateriale()" class="flex-1 bg-emerald-600 text-white py-3.5 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.99] transition shadow-md flex items-center justify-center gap-2">
+                        💾 Registra Costo Materiali
+                    </button>
+                    <button id="btnAnnullaMateriale" type="button" onclick="resetFormMateriali()" class="hidden bg-slate-500 text-white px-6 py-3.5 rounded-xl text-sm font-bold hover:bg-slate-600 transition shadow-md">
+                        Annulla
+                    </button>
+                </div>
+
+                <!-- Storico Materiali -->
+                <div class="mt-6 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <h3 class="font-bold text-slate-800 text-sm">🧾 Archivio DDT / Fatture</h3>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <label class="text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Cantiere:</label>
+                            <select id="filtroCantiereMateriali" onchange="aggiornaTabellaMateriali()" class="flex-1 sm:w-48 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                <option value="">Tutti i Cantieri</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="cardsMaterialiMobile" class="md:hidden divide-y divide-slate-200"></div>
+
+                    <div class="hidden md:block overflow-x-auto max-h-64 overflow-y-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead class="sticky top-0 bg-slate-100 text-slate-700 uppercase tracking-wider border-b border-slate-200">
+                                <tr>
+                                    <th class="p-3 border-r">Data</th>
+                                    <th class="p-3 border-r">Cantiere</th>
+                                    <th class="p-3 border-r">Fornitore</th>
+                                    <th class="p-3 border-r">Documento</th>
+                                    <th class="p-3 border-r">Dettaglio Voci</th>
+                                    <th class="p-3 border-r text-right">Totale (€)</th>
+                                    <th class="p-3 text-center">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabellaMaterialiBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEZIONE: CONSUNTIVO LAVORI CANTIERE -->
+            <div id="sec-consuntivo" class="sezione-app bg-gradient-to-br from-amber-50/80 to-orange-50/40 p-4 md:p-6 rounded-xl border border-amber-200 shadow-sm">
+                <div class="mb-4">
+                    <h2 class="text-base md:text-lg font-bold text-amber-950 flex items-center gap-2">📑 Consuntivo Lavori Cantiere</h2>
+                    <p class="text-xs text-slate-600 mt-0.5">Calcola il totale economico tra Manodopera, Mezzi e Materiali</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 bg-white p-4 rounded-xl border border-amber-200/80 shadow-sm mb-6">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Seleziona Cantiere *</label>
+                        <select id="selectCantiereConsuntivo" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white font-semibold focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            <option value="">-- Seleziona Cantiere --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tariffa Manod. (€/h)</label>
+                        <input type="number" id="costoOrarioManodopera" step="0.5" min="0" value="30.00" oninput="aggiornaConsuntivoSeVisibile()" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-blue-50/40 font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tariffa Mezzi (€/h)</label>
+                        <input type="number" id="costoOrarioMezzi" step="0.5" min="0" value="25.00" oninput="aggiornaConsuntivoSeVisibile()" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-amber-50/40 font-bold text-amber-900 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Dal (Opzionale)</label>
+                        <input type="date" id="consuntivoDataInizio" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Al (Opzionale)</label>
+                        <input type="date" id="consuntivoDataFine" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div class="sm:col-span-2 lg:col-span-6 flex flex-col sm:flex-row justify-end gap-2.5 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="generaConsuntivoSchermo()" class="w-full sm:w-auto bg-amber-600 text-white py-3 px-6 rounded-xl text-xs md:text-sm font-bold hover:bg-amber-700 active:scale-95 transition shadow-sm">
+                            🔍 Elabora Consuntivo Lavori
+                        </button>
+                        <button type="button" onclick="esportaConsuntivoPDF()" class="w-full sm:w-auto bg-slate-800 text-white py-3 px-5 rounded-xl text-xs md:text-sm font-bold hover:bg-slate-900 active:scale-95 transition shadow-sm">
+                            📥 Scarica & Salva su Drive
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Area Risultati Consuntivo -->
+                <div id="areaRisultatiConsuntivo" class="hidden space-y-6 bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b border-slate-200 pb-4 gap-4">
+                        <div>
+                            <h3 id="titoloConsuntivoOutput" class="text-base md:text-lg font-extrabold text-slate-800 uppercase"></h3>
+                            <p id="periodoConsuntivoOutput" class="text-xs text-slate-500 font-medium"></p>
+                        </div>
+                        <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full lg:w-auto">
+                            <div class="bg-blue-50 border border-blue-200 px-3 py-2 rounded-xl text-right">
+                                <span class="block text-[10px] font-bold text-blue-600 uppercase">Manodopera</span>
+                                <span id="kpiCostoManodopera" class="text-xs md:text-sm font-extrabold text-blue-900">€ 0,00</span>
+                            </div>
+                            <div class="bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl text-right">
+                                <span class="block text-[10px] font-bold text-amber-600 uppercase">Automezzi</span>
+                                <span id="kpiCostoMezzi" class="text-xs md:text-sm font-extrabold text-amber-900">€ 0,00</span>
+                            </div>
+                            <div class="bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl text-right">
+                                <span class="block text-[10px] font-bold text-emerald-600 uppercase">Materiali</span>
+                                <span id="kpiTotaleMateriali" class="text-xs md:text-sm font-extrabold text-emerald-900">€ 0,00</span>
+                            </div>
+                            <div class="bg-slate-900 border border-slate-700 px-3.5 py-2 rounded-xl text-right shadow-sm">
+                                <span class="block text-[10px] font-bold text-amber-400 uppercase">TOTALE LAVORI</span>
+                                <span id="kpiTotaleGenerale" class="text-sm md:text-base font-extrabold text-white">€ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">👷 1. Ore Lavorate (Manodopera & Mezzi)</h4>
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <table class="w-full text-left border-collapse text-xs min-w-[520px]">
+                                <thead>
+                                    <tr class="bg-slate-100 text-slate-700 uppercase border-b border-slate-200">
+                                        <th class="p-2.5 border-r">Dipendente / Risorsa</th>
+                                        <th class="p-2.5 border-r">Attività</th>
+                                        <th class="p-2.5 border-r text-center">Presenze</th>
+                                        <th class="p-2.5 border-r text-right">Ore</th>
+                                        <th class="p-2.5 border-r text-right">Tariffa</th>
+                                        <th class="p-2.5 text-right">Importo (€)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="consuntivoTabellaOre" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">📦 2. Dettaglio Analitico Materiali</h4>
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <table class="w-full text-left border-collapse text-xs min-w-[560px]">
+                                <thead>
+                                    <tr class="bg-slate-100 text-slate-700 uppercase border-b border-slate-200">
+                                        <th class="p-2.5 border-r">Data</th>
+                                        <th class="p-2.5 border-r">Fornitore</th>
+                                        <th class="p-2.5 border-r">Documento</th>
+                                        <th class="p-2.5 border-r">Materiale</th>
+                                        <th class="p-2.5 border-r text-center">Q.tà</th>
+                                        <th class="p-2.5 border-r text-right">Prezzo U.</th>
+                                        <th class="p-2.5 text-right">Importo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="consuntivoTabellaMaterialiDettaglio" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">🧾 3. Riepilogo Documenti Materiale</h4>
+                            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-100 text-slate-700 uppercase border-b border-slate-200">
+                                            <th class="p-2 border-r">Data</th>
+                                            <th class="p-2 border-r">Fornitore</th>
+                                            <th class="p-2 border-r">Riferimento</th>
+                                            <th class="p-2 text-right">Totale Doc.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="consuntivoTabellaMaterialiRiepilogo" class="divide-y divide-slate-100"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 md:p-5 rounded-xl border border-slate-200 flex flex-col justify-between space-y-2.5">
+                            <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-2">📊 Riepilogo Economico Finale</h4>
+                            <div class="space-y-2 text-xs">
+                                <div class="flex justify-between items-center gap-2">
+                                    <span class="text-slate-600">Manodopera (<span id="sintesiOreManodopera">0h</span> × <span id="sintesiTariffaManodopera">€0/h</span>):</span>
+                                    <span id="sintesiTotaleManodopera" class="font-bold text-blue-900 whitespace-nowrap">€ 0,00</span>
+                                </div>
+                                <div class="flex justify-between items-center gap-2">
+                                    <span class="text-slate-600">Automezzi (<span id="sintesiOreMezzi">0h</span> × <span id="sintesiTariffaMezzi">€0/h</span>):</span>
+                                    <span id="sintesiTotaleMezzi" class="font-bold text-amber-900 whitespace-nowrap">€ 0,00</span>
+                                </div>
+                                <div class="flex justify-between items-center gap-2">
+                                    <span class="text-slate-600">Materiali (<span id="sintesiNumDoc">0</span> DDT/Fatture):</span>
+                                    <span id="sintesiSpesaMateriali" class="font-bold text-emerald-800 whitespace-nowrap">€ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-sm md:text-base pt-3 border-t-2 border-slate-300 mt-2">
+                                <span class="font-extrabold text-slate-900 uppercase">TOTALE LAVORI:</span>
+                                <span id="sintesiTotaleGenerale" class="font-extrabold text-base md:text-lg text-slate-900 bg-amber-200/80 px-3 py-1 rounded-lg border border-amber-300">€ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEZIONE STORICO & REPORT MENSILI -->
+            <div id="sec-storico" class="sezione-app space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                    <!-- Export Dipendenti -->
+                    <div class="bg-slate-50 p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h2 class="text-sm md:text-base font-bold text-slate-800 mb-3 flex items-center gap-2">📊 Report Mensile Dipendenti</h2>
+                        <div class="space-y-3.5">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Mese di Riferimento</label>
+                                <input type="month" id="inputMese" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Dipendenti da Esportare</label>
+                                <div id="listaCheckboxExport" class="bg-white border border-slate-200 rounded-xl p-2.5 max-h-28 overflow-y-auto space-y-2 text-xs shadow-sm"></div>
+                            </div>
+                            <button type="button" onclick="esportaTabellaPDF()" class="w-full bg-emerald-600 text-white py-3 rounded-xl text-xs md:text-sm font-bold hover:bg-emerald-700 active:scale-95 transition shadow-md">
+                                📥 Scarica & Salva su Drive
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Export Singolo Cantiere -->
+                    <div class="bg-slate-50 p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                        <div class="space-y-3.5">
+                            <h2 class="text-sm md:text-base font-bold text-slate-800 mb-3 flex items-center gap-2">🏗️ Report Mensile Cantiere</h2>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Mese di Riferimento</label>
+                                <input type="month" id="inputMeseCantiere" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Seleziona Cantiere</label>
+                                <select id="selectCantiereExport" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"></select>
+                            </div>
+                        </div>
+                        <button type="button" onclick="esportaCantierePDF()" class="w-full bg-blue-600 text-white py-3 rounded-xl text-xs md:text-sm font-bold hover:bg-blue-700 active:scale-95 transition shadow-md mt-4">
+                            📥 Scarica & Salva su Drive
+                        </button>
+                    </div>
+
+                    <!-- Download Massivo Intervallo Date -->
+                    <div class="bg-slate-50 p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <h2 class="text-sm md:text-base font-bold text-slate-800 mb-3 flex items-center gap-2">📦 Download Massivo PDF</h2>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Data Inizio</label>
+                                    <input type="date" id="dataMassivaInizio" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none shadow-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Data Fine</label>
+                                    <input type="date" id="dataMassivaFine" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none shadow-sm">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" onclick="scaricaMassivoPerDate()" class="w-full bg-purple-600 text-white py-3 rounded-xl text-xs md:text-sm font-bold hover:bg-purple-700 active:scale-95 transition shadow-md mt-4">
+                            📥 Scarica PDF per Intervallo Date
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STORICO REGISTRAZIONI -->
+                <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="p-4 md:p-6 bg-slate-50 border-b border-slate-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-base">📋 Storico Rapportini Giornalieri</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">Filtra, copia, modifica o scarica in PDF i rapportini</p>
+                        </div>
+                        
+                        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                            <button type="button" onclick="selezionaTuttiRapportini(true)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-2 rounded-lg font-semibold transition">Tutti</button>
+                            <button type="button" onclick="selezionaTuttiRapportini(false)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-2 rounded-lg font-semibold transition">Nessuno</button>
+                            <button type="button" onclick="scaricaSelezionatiPDF()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded-lg font-bold transition shadow-sm">📥 PDF Selezionati</button>
+
+                            <select id="filtroCantiereStorico" onchange="aggiornaInterfaccia()" class="flex-1 sm:flex-none border border-slate-300 rounded-lg px-2.5 py-2 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="">Tutti i Cantieri</option>
+                            </select>
+
+                            <select id="ordinamentoStorico" onchange="aggiornaInterfaccia()" class="border border-slate-300 rounded-lg px-2.5 py-2 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="desc">Recenti prima</option>
+                                <option value="asc">Meno recenti</option>
+                            </select>
+
+                            <button type="button" onclick="cancellaTutto()" class="text-red-600 hover:text-red-800 text-xs font-semibold bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-lg transition ml-auto lg:ml-0">Svuota</button>
+                        </div>
+                    </div>
+
+                    <div id="cardsStoricoMobile" class="md:hidden divide-y divide-slate-200"></div>
+
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 uppercase text-xs tracking-wider border-b border-slate-200">
+                                    <th class="p-3 text-center w-10 border-r">✓</th>
+                                    <th class="p-3.5 border-r">Data</th>
+                                    <th class="p-3.5 border-r">Cantiere / Causale</th>
+                                    <th class="p-3.5 border-r">Dipendenti Coinvolti (Ore)</th>
+                                    <th class="p-3.5 border-r">Mezzi / Note</th>
+                                    <th class="p-3.5 text-center">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabellaStoricoBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- BARRA DI NAVIGAZIONE FISSA IN BASSO PER CELLULARE -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] z-40 grid grid-cols-5 text-[11px] font-bold text-slate-600">
+        <button type="button" onclick="cambiaSchedaMobile('rapportino')" id="mob-tab-rapportino" class="mob-tab flex flex-col items-center justify-center py-2.5 text-blue-700 bg-blue-50/70 border-t-2 border-blue-600">
+            <span class="text-lg leading-none mb-1">📝</span>
+            <span>Ore</span>
+        </button>
+        <button type="button" onclick="cambiaSchedaMobile('materiali')" id="mob-tab-materiali" class="mob-tab flex flex-col items-center justify-center py-2.5 hover:bg-slate-50 border-t-2 border-transparent">
+            <span class="text-lg leading-none mb-1">🧱</span>
+            <span>Materiali</span>
+        </button>
+        <button type="button" onclick="cambiaSchedaMobile('consuntivo')" id="mob-tab-consuntivo" class="mob-tab flex flex-col items-center justify-center py-2.5 hover:bg-slate-50 border-t-2 border-transparent">
+            <span class="text-lg leading-none mb-1">📑</span>
+            <span>Consuntivo</span>
+        </button>
+        <button type="button" onclick="cambiaSchedaMobile('storico')" id="mob-tab-storico" class="mob-tab flex flex-col items-center justify-center py-2.5 hover:bg-slate-50 border-t-2 border-transparent">
+            <span class="text-lg leading-none mb-1">📋</span>
+            <span>Storico/PDF</span>
+        </button>
+        <button type="button" onclick="cambiaSchedaMobile('anagrafiche')" id="mob-tab-anagrafiche" class="mob-tab flex flex-col items-center justify-center py-2.5 hover:bg-slate-50 border-t-2 border-transparent">
+            <span class="text-lg leading-none mb-1">⚙️</span>
+            <span>Database</span>
+        </button>
+    </nav>
+
+    <img id="logoAziendaleImg" src="logo_aziendale.jpg" class="hidden" crossorigin="anonymous">
+
+    <script>
+        // =========================================================================
+        // URL WEB APP DI GOOGLE APPS SCRIPT (AGGIORNATO)
+        // =========================================================================
+        const URL_GOOGLE_DRIVE = "https://script.google.com/macros/s/AKfycbxXdPYGi0YG8WJSuzxa2_vwy8dlJ0jhn85rL0dXavF_tNzecXRTx_OTL-ozjxvC4pQW/exec";
+        // =========================================================================
+
+        const statoCloudBadge = document.getElementById('statoCloudBadge');
+        if (!URL_GOOGLE_DRIVE || URL_GOOGLE_DRIVE.includes("INCOLLA_QUI")) {
+            statoCloudBadge.textContent = "⚠️ Drive non collegato";
+            statoCloudBadge.className = "bg-amber-900/80 text-amber-200 px-2.5 py-1 rounded-full border border-amber-500/40 text-[11px] font-semibold";
+        }
+
+        function mostraNotificaCloud(testo, tipo = "info") {
+            const toast = document.getElementById('toastCloud');
+            const icon = document.getElementById('toastCloudIcon');
+            const msg = document.getElementById('toastCloudText');
+            
+            msg.textContent = testo;
+            if (tipo === "success") {
+                icon.textContent = "✅";
+                toast.className = "fixed top-4 right-4 z-50 bg-emerald-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-emerald-500 text-xs font-bold flex items-center gap-2.5";
+            } else if (tipo === "error") {
+                icon.textContent = "⚠️";
+                toast.className = "fixed top-4 right-4 z-50 bg-red-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-red-500 text-xs font-bold flex items-center gap-2.5";
+            } else {
+                icon.textContent = "☁️";
+                toast.className = "fixed top-4 right-4 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2.5";
+            }
+
+            toast.classList.remove('hidden');
+            if (tipo !== "info") {
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 4000);
+            }
+        }
+
+        async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella = "Rapportini giornalieri") {
+            if (!URL_GOOGLE_DRIVE || URL_GOOGLE_DRIVE.includes("INCOLLA_QUI")) return;
+            try {
+                mostraNotificaCloud("Salvataggio PDF su Google Drive...", "info");
+                let payload = {
+                    azione: "UPLOAD_PDF",
+                    data: dataRiferimento,
+                    cartella: cartella,
+                    nomeFilePDF: nomeFilePDF,
+                    pdfBase64: docJsPDF.output('datauristring').split(',')[1]
+                };
+
+                await fetch(URL_GOOGLE_DRIVE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                mostraNotificaCloud("PDF salvato su Drive!", "success");
+                console.log("Sincronizzazione file su Drive completata.");
+            } catch (error) {
+                console.error("Errore sincronizzazione Google Drive:", error);
+                mostraNotificaCloud("Errore salvataggio PDF su Drive", "error");
+            }
+        }
+
+        let dipendenti = JSON.parse(localStorage.getItem('gestionale_dipendenti')) || ["Lanzi Rodolfo", "Mario Rossi", "Luigi Bianchi"];
+        
+        let cantieri = JSON.parse(localStorage.getItem('gestionale_cantieri')) || [
+            {nome: "Cantiere 1", colore: "#E2EFDA"}, {nome: "Cantiere 2", colore: "#D9E1F2"}, 
+            {nome: "Cantiere 3", colore: "#FCE4D6"}, {nome: "Cantiere 4", colore: "#EDEDED"}
+        ];
+
+        let causali = JSON.parse(localStorage.getItem('gestionale_causali')) || [
+            {nome: "Malattia", colore: "#FFF2CC"}, {nome: "CIG", colore: "#F2F2F2"},
+            {nome: "Ferie", colore: "#E2EFDA"}, {nome: "Permesso", colore: "#FCE4D6"}
+        ];
+
+        let automezzi = JSON.parse(localStorage.getItem('gestionale_automezzi')) || ["Furgone Daily", "Fiat Doblò", "Autocarro Gru"];
+        let rapportini = JSON.parse(localStorage.getItem('gestionale_rapportini')) || [];
+        let materialiDocs = JSON.parse(localStorage.getItem('gestionale_materiali')) || [];
+
+        const savedTariffaMan = localStorage.getItem('gestionale_tariffa_manodopera');
+        const savedTariffaMezzi = localStorage.getItem('gestionale_tariffa_mezzi');
+        if (savedTariffaMan !== null) document.getElementById('costoOrarioManodopera').value = savedTariffaMan;
+        if (savedTariffaMezzi !== null) document.getElementById('costoOrarioMezzi').value = savedTariffaMezzi;
+
+        const oggi = new Date();
+        document.getElementById('inputData').valueAsDate = oggi;
+        document.getElementById('dataDocMateriale').valueAsDate = oggi;
+        const formatoMeseCorrente = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('inputMese').value = formatoMeseCorrente;
+        document.getElementById('inputMeseCantiere').value = formatoMeseCorrente;
+        document.getElementById('dataOdiernaBadge').textContent = oggi.toLocaleDateString('it-IT', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+
+        let schedaAttiva = window.innerWidth < 768 ? 'rapportino' : 'tutto';
+
+        function cambiaSchedaMobile(nomeScheda) {
+            schedaAttiva = nomeScheda;
+            const sezioni = ['anagrafiche', 'rapportino', 'materiali', 'consuntivo', 'storico'];
+
+            sezioni.forEach(sec => {
+                const el = document.getElementById(`sec-${sec}`);
+                if (!el) return;
+                if (nomeScheda === 'tutto' || nomeScheda === sec) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+
+            document.querySelectorAll('.mob-tab').forEach(btn => {
+                btn.classList.remove('text-blue-700', 'bg-blue-50/70', 'border-blue-600');
+                btn.classList.add('border-transparent');
+            });
+            const activeMobBtn = document.getElementById(`mob-tab-${nomeScheda}`);
+            if (activeMobBtn) {
+                activeMobBtn.classList.add('text-blue-700', 'bg-blue-50/70', 'border-blue-600');
+                activeMobBtn.classList.remove('border-transparent');
+            }
+
+            document.querySelectorAll('.desk-tab').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-blue-900', 'border-t', 'border-x', 'border-slate-200', 'shadow-sm');
+                btn.classList.add('text-slate-600');
+            });
+            const activeDeskBtn = document.getElementById(`desk-tab-${nomeScheda}`);
+            if (activeDeskBtn) {
+                activeDeskBtn.classList.add('bg-white', 'text-blue-900', 'border-t', 'border-x', 'border-slate-200', 'shadow-sm');
+                activeDeskBtn.classList.remove('text-slate-600');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        cambiaSchedaMobile(schedaAttiva);
+
+        function formatValuta(num) {
+            return '€ ' + Number(num || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formattaDataDDMMYY(dataStr) {
+            if (!dataStr) return "";
+            const parti = dataStr.split('-');
+            if (parti.length !== 3) return dataStr;
+            return `${parti[2]}.${parti[1]}.${parti[0].slice(-2)}`;
+        }
+
+        async function salvaStorage() {
+            localStorage.setItem('gestionale_dipendenti', JSON.stringify(dipendenti));
+            localStorage.setItem('gestionale_cantieri', JSON.stringify(cantieri));
+            localStorage.setItem('gestionale_causali', JSON.stringify(causali));
+            localStorage.setItem('gestionale_automezzi', JSON.stringify(automezzi));
+            localStorage.setItem('gestionale_rapportini', JSON.stringify(rapportini));
+            localStorage.setItem('gestionale_materiali', JSON.stringify(materialiDocs));
+            aggiornaInterfaccia();
+
+            if (URL_GOOGLE_DRIVE && !URL_GOOGLE_DRIVE.includes("INCOLLA_QUI")) {
+                try {
+                    mostraNotificaCloud("Sincronizzazione database su Drive...", "info");
+                    let payloadDB = {
+                        azione: "SYNC_DB",
+                        payload: {
+                            dipendenti,
+                            cantieri,
+                            causali,
+                            automezzi,
+                            rapportini,
+                            materialiDocs
+                        }
+                    };
+
+                    await fetch(URL_GOOGLE_DRIVE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payloadDB)
+                    });
+                    mostraNotificaCloud("Database sincronizzato su Drive!", "success");
+                } catch (err) {
+                    console.error("Errore sync DB cloud:", err);
+                    mostraNotificaCloud("Errore sincronizzazione cloud", "error");
+                }
+            }
+        }
+
+        async function caricaDatabaseDaCloud() {
+            if (!URL_GOOGLE_DRIVE || URL_GOOGLE_DRIVE.includes("INCOLLA_QUI")) return;
+            try {
+                mostraNotificaCloud("Caricamento dati da Google Drive...", "info");
+                let response = await fetch(URL_GOOGLE_DRIVE + "?azione=GET_DB");
+                let data = await response.json();
+
+                if (data && data.dipendenti) {
+                    dipendenti = data.dipendenti;
+                    cantieri = data.cantieri || cantieri;
+                    causali = data.causali || causali;
+                    automezzi = data.automezzi || automezzi;
+                    rapportini = data.rapportini || [];
+                    materialiDocs = data.materialiDocs || [];
+
+                    localStorage.setItem('gestionale_dipendenti', JSON.stringify(dipendenti));
+                    localStorage.setItem('gestionale_cantieri', JSON.stringify(cantieri));
+                    localStorage.setItem('gestionale_causali', JSON.stringify(causali));
+                    localStorage.setItem('gestionale_automezzi', JSON.stringify(automezzi));
+                    localStorage.setItem('gestionale_rapportini', JSON.stringify(rapportini));
+                    localStorage.setItem('gestionale_materiali', JSON.stringify(materialiDocs));
+
+                    aggiornaInterfaccia();
+                    mostraNotificaCloud("Database aggiornato da Drive!", "success");
+                } else {
+                    salvaStorage();
+                }
+            } catch (e) {
+                console.log("Utilizzo dati locali (offline o primo avvio):", e);
+                mostraNotificaCloud("Modalità offline attiva", "info");
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            aggiungiRigaMateriale();
+            caricaDatabaseDaCloud();
+        });
+
+        function aggiornaInterfaccia() {
+            const divAnaDep = document.getElementById('listaAnagraficaDipendenti');
+            divAnaDep.innerHTML = '';
+            dipendenti.forEach((d, idx) => {
+                divAnaDep.innerHTML += `<div class="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm"><span class="font-medium text-slate-700">${d}</span> <button type="button" onclick="eliminaElemento('dipendenti', ${idx})" class="text-red-600 hover:text-red-800 font-bold px-2 py-1 rounded text-xs bg-red-50">✕</button></div>`;
+            });
+
+            const divAnaCant = document.getElementById('listaAnagraficaCantieri');
+            divAnaCant.innerHTML = '';
+            cantieri.forEach((c, idx) => {
+                divAnaCant.innerHTML += `<div class="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm"><div class="flex items-center gap-2"><span class="w-4 h-4 rounded border inline-block" style="background-color: ${c.colore}"></span><span class="font-medium text-slate-700">${c.nome}</span></div> <button type="button" onclick="eliminaElemento('cantieri', ${idx})" class="text-red-600 hover:text-red-800 font-bold px-2 py-1 rounded text-xs bg-red-50">✕</button></div>`;
+            });
+
+            const divAnaCaus = document.getElementById('listaAnagraficaCausali');
+            divAnaCaus.innerHTML = '';
+            causali.forEach((c, idx) => {
+                divAnaCaus.innerHTML += `<div class="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm"><div class="flex items-center gap-2"><span class="w-4 h-4 rounded border inline-block" style="background-color: ${c.colore}"></span><span class="font-medium text-slate-700">${c.nome}</span></div> <button type="button" onclick="eliminaElemento('causali', ${idx})" class="text-red-600 hover:text-red-800 font-bold px-2 py-1 rounded text-xs bg-red-50">✕</button></div>`;
+            });
+
+            const divAnaMezzi = document.getElementById('listaAnagraficaAutomezzi');
+            divAnaMezzi.innerHTML = '';
+            automezzi.forEach((m, idx) => {
+                divAnaMezzi.innerHTML += `<div class="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm"><span class="font-medium text-slate-700">${m}</span> <button type="button" onclick="eliminaElemento('automezzi', ${idx})" class="text-red-600 hover:text-red-800 font-bold px-2 py-1 rounded text-xs bg-red-50">✕</button></div>`;
+            });
+
+            let selectGlobale = document.getElementById('selectCantiereGlobale');
+            let valCorrente = selectGlobale.value;
+            selectGlobale.innerHTML = '<option value="">-- Seleziona Cantiere o Causale --</option>';
+            selectGlobale.innerHTML += '<optgroup label="Cantieri">';
+            cantieri.forEach(c => { selectGlobale.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+            selectGlobale.innerHTML += '</optgroup>';
+            selectGlobale.innerHTML += '<optgroup label="Causali / Assenze">';
+            causali.forEach(c => { selectGlobale.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+            selectGlobale.innerHTML += '</optgroup>';
+            selectGlobale.value = valCorrente;
+
+            const selCantMat = document.getElementById('selectCantiereMateriale');
+            const valCantMat = selCantMat.value;
+            selCantMat.innerHTML = '<option value="">-- Seleziona Cantiere --</option>';
+            cantieri.forEach(c => { selCantMat.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+            selCantMat.value = valCantMat;
+
+            const datalistFornitori = document.getElementById('listaFornitoriSuggeriti');
+            datalistFornitori.innerHTML = '';
+            const fornitoriUnici = Array.from(new Set(materialiDocs.map(m => m.fornitore).filter(Boolean))).sort();
+            fornitoriUnici.forEach(f => {
+                datalistFornitori.innerHTML += `<option value="${f}">`;
+            });
+
+            const filtroMat = document.getElementById('filtroCantiereMateriali');
+            const valFiltroMat = filtroMat.value;
+            filtroMat.innerHTML = '<option value="">Tutti i Cantieri</option>';
+            cantieri.forEach(c => { filtroMat.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+            filtroMat.value = valFiltroMat;
+
+            const selCantCons = document.getElementById('selectCantiereConsuntivo');
+            const valCantCons = selCantCons.value;
+            selCantCons.innerHTML = '<option value="">-- Seleziona Cantiere --</option>';
+            cantieri.forEach(c => { selCantCons.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+            selCantCons.value = valCantCons;
+
+            let filtroStorico = document.getElementById('filtroCantiereStorico');
+            let filtroValCorrente = filtroStorico.value;
+            filtroStorico.innerHTML = '<option value="">Tutti i Cantieri</option>';
+            cantieri.forEach(c => { filtroStorico.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+            causali.forEach(c => { filtroStorico.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+            filtroStorico.value = filtroValCorrente;
+
+            const selCantExp = document.getElementById('selectCantiereExport');
+            selCantExp.innerHTML = '';
+            cantieri.forEach(c => { selCantExp.innerHTML += `<option value="${c.nome}">${c.nome}</option>`; });
+
+            renderizzaListaDipendentiOre();
+
+            const divChkMezzi = document.getElementById('checkboxInserimentoAutomezzi');
+            divChkMezzi.innerHTML = '';
+            automezzi.forEach(m => {
+                divChkMezzi.innerHTML += `
+                    <div class="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <label class="flex items-center gap-2.5 cursor-pointer flex-1">
+                            <input type="checkbox" value="${m}" onchange="toggleMezzoOre(this)" class="chk-ins-mezzo rounded text-amber-600 w-5 h-5"> 
+                            <span class="font-semibold text-slate-700 text-xs sm:text-sm">${m}</span>
+                        </label>
+                        <input type="number" placeholder="Ore" value="8" step="0.5" min="0" max="24" id="ore_mezzo_${m}" class="input-mezzo-ore hidden w-20 border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white text-center font-bold">
+                    </div>
+                `;
+            });
+
+            const divChkExp = document.getElementById('listaCheckboxExport');
+            divChkExp.innerHTML = '';
+            dipendenti.forEach(d => {
+                divChkExp.innerHTML += `<label class="flex items-center gap-2.5 cursor-pointer text-xs py-0.5"><input type="checkbox" value="${d}" checked class="chk-exp-dep rounded text-emerald-600 w-4 h-4"> <span class="font-medium text-slate-700">${d}</span></label>`;
+            });
+
+            aggiornaTabellaMateriali();
+
+            const tbody = document.getElementById('tabellaStoricoBody');
+            const cardsMob = document.getElementById('cardsStoricoMobile');
+            tbody.innerHTML = '';
+            cardsMob.innerHTML = '';
+
+            let rapportiniFiltrati = rapportini.filter(rap => {
+                if (!filtroStorico.value) return true;
+                return rap.cantierePrincipale === filtroStorico.value;
+            });
+
+            let ordinamento = document.getElementById('ordinamentoStorico').value;
+            rapportiniFiltrati.sort((a, b) => {
+                let dataA = new Date(a.data);
+                let dataB = new Date(b.data);
+                return ordinamento === 'asc' ? dataA - dataB : dataB - dataA;
+            });
+
+            if (rapportiniFiltrati.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400 italic">Nessun rapportino trovato con i filtri selezionati.</td></tr>`;
+                cardsMob.innerHTML = `<div class="p-6 text-center text-slate-400 italic text-xs">Nessun rapportino trovato con i filtri selezionati.</div>`;
+                return;
+            }
+
+            rapportiniFiltrati.forEach((rap) => {
+                let realIndex = rapportini.findIndex(r => r.id === rap.id);
+
+                let dipListStr = rap.vociDipendenti.map(v => `<span class="inline-block bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-md text-[11px] font-medium mr-1 mb-1">👤 ${v.dipendente}: <b>${v.ore}h</b> (${v.voce})</span>`).join('');
+                let mezziStr = rap.mezziObj && rap.mezziObj.length > 0 ? `<div class="text-amber-800 text-[11px] mt-1">🚚 <b>Mezzi:</b> ${rap.mezziObj.map(mo => `${mo.nome} (${mo.ore}h)`).join(', ')}</div>` : '';
+                let noteStr = rap.note ? `<div class="text-slate-600 text-[11px] mt-0.5"><b>Note:</b> ${rap.note}</div>` : '';
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                        <td class="p-3 text-center border-r">
+                            <input type="checkbox" value="${realIndex}" class="chk-rapportino-select w-4 h-4 text-amber-600 rounded">
+                        </td>
+                        <td class="p-3.5 border-r font-medium text-slate-700 whitespace-nowrap">${rap.data}</td>
+                        <td class="p-3.5 border-r font-bold text-slate-900">${rap.cantierePrincipale}</td>
+                        <td class="p-3.5 border-r">${dipListStr}</td>
+                        <td class="p-3.5 border-r text-xs">${mezziStr}${noteStr}</td>
+                        <td class="p-3.5 text-center space-x-1 whitespace-nowrap">
+                            <button type="button" onclick="generaPDFRapportinoSingolo(${realIndex})" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm" title="Stampa PDF e Salva su Drive">📄 PDF</button>
+                            <button type="button" onclick="copiaRapportino(${realIndex})" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm" title="Copia e riutilizza">📋 Copia</button>
+                            <button type="button" onclick="modificaRapportino(${realIndex})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm">Modifica</button>
+                            <button type="button" onclick="eliminaRapportino(${realIndex})" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm">Elimina</button>
+                        </td>
+                    </tr>
+                `;
+
+                cardsMob.innerHTML += `
+                    <div class="p-4 bg-white space-y-2.5">
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <input type="checkbox" value="${realIndex}" class="chk-rapportino-select w-5 h-5 text-amber-600 rounded">
+                                <div>
+                                    <span class="block text-sm font-extrabold text-slate-900">${rap.cantierePrincipale}</span>
+                                    <span class="text-xs font-medium text-slate-500">📅 ${rap.data}</span>
+                                </div>
+                            </div>
+                            <button type="button" onclick="generaPDFRapportinoSingolo(${realIndex})" class="bg-amber-100 text-amber-900 border border-amber-300 text-xs px-2.5 py-1.5 rounded-lg font-bold shadow-sm">📄 PDF</button>
+                        </div>
+                        <div class="pt-1">${dipListStr}</div>
+                        ${mezziStr}
+                        ${noteStr}
+                        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                            <button type="button" onclick="copiaRapportino(${realIndex})" class="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs py-2 rounded-lg font-bold text-center">📋 Copia</button>
+                            <button type="button" onclick="modificaRapportino(${realIndex})" class="bg-blue-50 text-blue-800 border border-blue-200 text-xs py-2 rounded-lg font-bold text-center">✏️ Modifica</button>
+                            <button type="button" onclick="eliminaRapportino(${realIndex})" class="bg-red-50 text-red-800 border border-red-200 text-xs py-2 rounded-lg font-bold text-center">🗑️ Elimina</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderizzaListaDipendentiOre(datiSalvati = null) {
+            const container = document.getElementById('containerListaDipendentiOre');
+            container.innerHTML = '';
+
+            const cantierePrincipaleCorrente = document.getElementById('selectCantiereGlobale').value;
+
+            dipendenti.forEach(dep => {
+                let spuntato = false;
+                let oreVal = 8;
+                let causaleVal = cantierePrincipaleCorrente;
+
+                if (datiSalvati) {
+                    let voceTrovata = datiSalvati.find(v => v.dipendente === dep);
+                    if (voceTrovata) {
+                        spuntato = true;
+                        oreVal = voceTrovata.ore;
+                        causaleVal = voceTrovata.voce;
+                    }
+                } else {
+                    spuntato = true;
+                }
+
+                let optionsCausali = '';
+                optionsCausali += '<optgroup label="Cantieri">';
+                cantieri.forEach(c => {
+                    let sel = (c.nome === causaleVal) ? 'selected' : '';
+                    optionsCausali += `<option value="${c.nome}" ${sel}>${c.nome}</option>`;
+                });
+                optionsCausali += '</optgroup>';
+                optionsCausali += '<optgroup label="Causali / Assenze">';
+                causali.forEach(c => {
+                    let sel = (c.nome === causaleVal) ? 'selected' : '';
+                    optionsCausali += `<option value="${c.nome}" ${sel}>${c.nome}</option>`;
+                });
+                optionsCausali += '</optgroup>';
+
+               let row = document.createElement('div');
+row.className = "flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 row-dipendente-ore";
+                row.dataset.dipendente = dep;
+
+                let disabledClass = spuntato ? '' : 'opacity-40 pointer-events-none';
+
+                row.innerHTML = `
+                    <div class="flex items-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end wrapper-campi-dep ${disabledClass}">
+                        <input type="checkbox" ${spuntato ? 'checked' : ''} onchange="toggleRigaDipendente(this)" class="chk-attivo-dep w-5 h-5 text-blue-600 rounded cursor-pointer">
+                        <span class="font-bold text-slate-800 text-sm w-32 truncate">${dep}</span>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end wrapper-campi-dep ${disabledClass}">
+                        <div class="flex items-center gap-1">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase">Ore:</label>
+                            <input type="number" step="0.5" min="0" max="24" value="${oreVal}" class="input-ore-dep w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white text-center font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div class="flex items-center gap-1 flex-1 sm:flex-none">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase hidden sm:inline">Causale:</label>
+                            <select class="select-causale-dep border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                ${optionsCausali}
+                            </select>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function toggleRigaDipendente(checkbox) {
+            const wrapper = checkbox.closest('.row-dipendente-ore').querySelector('.wrapper-campi-dep');
+            const inputOre = wrapper.querySelector('.input-ore-dep');
+            if (checkbox.checked) {
+                wrapper.classList.remove('opacity-40', 'pointer-events-none');
+                if (parseFloat(inputOre.value) === 0) inputOre.value = 8;
+            } else {
+                wrapper.classList.add('opacity-40', 'pointer-events-none');
+            }
+        }
+
+        function selezionaTuttiDipendenti(stato) {
+            document.querySelectorAll('.chk-attivo-dep').forEach(chk => {
+                chk.checked = stato;
+                toggleRigaDipendente(chk);
+            });
+        }
+
+        function aggiornaCantierePrincipaleUI() {
+            const cantierePrincipale = document.getElementById('selectCantiereGlobale').value;
+            if (!cantierePrincipale) return;
+
+            document.querySelectorAll('.row-dipendente-ore').forEach(row => {
+                const select = row.querySelector('.select-causale-dep');
+                if (!select.value || cantieri.some(c => c.nome === select.value)) {
+                    select.value = cantierePrincipale;
+                }
+            });
+        }
+
+        function aggiungiRigaMateriale(descrizione = '', quantita = 1, prezzo = '') {
+            const container = document.getElementById('containerVociMateriali');
+            const row = document.createElement('div');
+            row.className = "grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center bg-slate-50 p-3 md:p-2 rounded-xl border border-slate-200 riga-materiale";
+
+            row.innerHTML = `
+                <div class="md:col-span-6">
+                    <label class="md:hidden block text-[10px] font-bold text-slate-500 uppercase mb-1">Descrizione Materiale</label>
+                    <input type="text" placeholder="Es. Cemento 25kg, Tubo PVC..." value="${descrizione}" class="mat-desc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 md:contents gap-2">
+                    <div class="md:col-span-2">
+                        <label class="md:hidden block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantità</label>
+                        <input type="number" step="0.01" min="0" value="${quantita}" oninput="ricalcolaTotaleMateriali()" placeholder="Q.tà" class="mat-qta w-full border border-slate-300 rounded-lg px-2.5 py-2 text-sm bg-white text-center font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="md:hidden block text-[10px] font-bold text-slate-500 uppercase mb-1">Prezzo Unit. (€)</label>
+                        <input type="number" step="0.01" min="0" value="${prezzo}" oninput="ricalcolaTotaleMateriali()" placeholder="0.00" class="mat-prezzo w-full border border-slate-300 rounded-lg px-2.5 py-2 text-sm bg-white text-right font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="md:col-span-2 flex items-center justify-between md:justify-end gap-2 pt-1.5 md:pt-0 border-t md:border-t-0 border-slate-200">
+                    <span class="md:hidden text-xs font-semibold text-slate-500">Subtotale:</span>
+                    <div class="flex items-center gap-2">
+                        <span class="mat-subtotale text-sm md:text-xs font-extrabold text-emerald-800">€ 0,00</span>
+                        <button type="button" onclick="rimuoviRigaMateriale(this)" class="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg px-2.5 py-1.5 text-xs font-bold" title="Rimuovi voce">✕</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(row);
+            ricalcolaTotaleMateriali();
+        }
+
+        function rimuoviRigaMateriale(btn) {
+            const container = document.getElementById('containerVociMateriali');
+            if (container.children.length > 1) {
+                btn.closest('.riga-materiale').remove();
+                ricalcolaTotaleMateriali();
+            } else {
+                alert("Deve esserci almeno una voce materiale nel documento.");
+            }
+        }
+
+        function ricalcolaTotaleMateriali() {
+            let totaleDoc = 0;
+            document.querySelectorAll('.riga-materiale').forEach(row => {
+                const qta = parseFloat(row.querySelector('.mat-qta').value) || 0;
+                const prezzo = parseFloat(row.querySelector('.mat-prezzo').value) || 0;
+                const sub = qta * prezzo;
+                totaleDoc += sub;
+                row.querySelector('.mat-subtotale').textContent = formatValuta(sub);
+            });
+            document.getElementById('totaleDocumentoLive').textContent = formatValuta(totaleDoc);
+        }
+
+        function registraDocumentoMateriale() {
+            const cantiere = document.getElementById('selectCantiereMateriale').value;
+            const fornitore = document.getElementById('inputFornitoreMateriale').value.trim();
+            const tipoDoc = document.getElementById('tipoDocMateriale').value;
+            const numeroDoc = document.getElementById('numeroDocMateriale').value.trim();
+            const dataDoc = document.getElementById('dataDocMateriale').value;
+            const editId = document.getElementById('editMaterialeId').value;
+
+            if (!cantiere || !numeroDoc || !dataDoc) {
+                alert("Compila Cantiere, Numero DDT/Fattura e Data Documento!");
+                return;
+            }
+
+            let voci = [];
+            let totaleDocumento = 0;
+
+            document.querySelectorAll('.riga-materiale').forEach(row => {
+                const desc = row.querySelector('.mat-desc').value.trim();
+                const qta = parseFloat(row.querySelector('.mat-qta').value) || 0;
+                const prezzo = parseFloat(row.querySelector('.mat-prezzo').value) || 0;
+                if (desc && qta > 0) {
+                    const totaleRiga = qta * prezzo;
+                    voci.push({
+                        descrizione: desc,
+                        quantita: qta,
+                        prezzoUnitario: prezzo,
+                        totaleRiga: totaleRiga
+                    });
+                    totaleDocumento += totaleRiga;
+                }
+            });
+
+            if (voci.length === 0) {
+                alert("Inserisci almeno una voce materiale con descrizione e quantità valida!");
+                return;
+            }
+
+            const docObj = {
+                id: editId ? editId : 'mat_' + Date.now(),
+                cantiere,
+                fornitore: fornitore || 'Fornitore non specificato',
+                tipoDoc,
+                numeroDoc,
+                data: dataDoc,
+                voci,
+                totaleDocumento
+            };
+
+            if (editId) {
+                const idx = materialiDocs.findIndex(m => m.id === editId);
+                if (idx > -1) materialiDocs[idx] = docObj;
+            } else {
+                materialiDocs.push(docObj);
+            }
+
+            resetFormMateriali();
+            salvaStorage();
+            alert("Documento materiale registrato con successo!");
+        }
+
+        function modificaDocumentoMateriale(id) {
+            const doc = materialiDocs.find(m => m.id === id);
+            if (!doc) return;
+
+            if (window.innerWidth < 768) cambiaSchedaMobile('materiali');
+
+            document.getElementById('editMaterialeId').value = doc.id;
+            document.getElementById('selectCantiereMateriale').value = doc.cantiere;
+            document.getElementById('inputFornitoreMateriale').value = doc.fornitore || '';
+            document.getElementById('tipoDocMateriale').value = doc.tipoDoc;
+            document.getElementById('numeroDocMateriale').value = doc.numeroDoc;
+            document.getElementById('dataDocMateriale').value = doc.data;
+
+            document.getElementById('formMaterialiTitle').textContent = "✏️ Modifica Documento Materiali";
+            document.getElementById('editMaterialeBadge').classList.remove('hidden');
+            document.getElementById('btnSalvaMateriale').textContent = "Aggiorna Costo Materiali";
+            document.getElementById('btnAnnullaMateriale').classList.remove('hidden');
+
+            const container = document.getElementById('containerVociMateriali');
+            container.innerHTML = '';
+            doc.voci.forEach(v => {
+                aggiungiRigaMateriale(v.descrizione, v.quantita, v.prezzoUnitario);
+            });
+
+            document.getElementById('formMaterialiTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function eliminaDocumentoMateriale(id) {
+            if (confirm("Vuoi eliminare questo DDT/Fattura?")) {
+                materialiDocs = materialiDocs.filter(m => m.id !== id);
+                salvaStorage();
+            }
+        }
+
+        function resetFormMateriali() {
+            document.getElementById('editMaterialeId').value = '';
+            document.getElementById('inputFornitoreMateriale').value = '';
+            document.getElementById('numeroDocMateriale').value = '';
+            document.getElementById('dataDocMateriale').valueAsDate = new Date();
+            document.getElementById('formMaterialiTitle').textContent = "🧱 Costi Materiali (DDT / Fatture)";
+            document.getElementById('editMaterialeBadge').classList.add('hidden');
+            document.getElementById('btnSalvaMateriale').textContent = "💾 Registra Costo Materiali";
+            document.getElementById('btnAnnullaMateriale').classList.add('hidden');
+
+            const container = document.getElementById('containerVociMateriali');
+            container.innerHTML = '';
+            aggiungiRigaMateriale();
+        }
+
+        function aggiornaTabellaMateriali() {
+            const tbody = document.getElementById('tabellaMaterialiBody');
+            const cardsMob = document.getElementById('cardsMaterialiMobile');
+            const filtro = document.getElementById('filtroCantiereMateriali').value;
+            tbody.innerHTML = '';
+            cardsMob.innerHTML = '';
+
+            let lista = materialiDocs.filter(m => !filtro || m.cantiere === filtro);
+            lista.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+            if (lista.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400 italic">Nessun documento materiale registrato.</td></tr>`;
+                cardsMob.innerHTML = `<div class="p-6 text-center text-slate-400 italic text-xs">Nessun documento materiale registrato.</div>`;
+                return;
+            }
+
+            lista.forEach(doc => {
+                const vociBadge = doc.voci.map(v => 
+                    `<span class="inline-block bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded-md text-[11px] mr-1 mb-1">${v.descrizione} (x${v.quantita} @ ${formatValuta(v.prezzoUnitario)})</span>`
+                ).join('');
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-3 border-r font-medium text-slate-700 whitespace-nowrap">${doc.data}</td>
+                        <td class="p-3 border-r font-bold text-slate-900">${doc.cantiere}</td>
+                        <td class="p-3 border-r font-semibold text-slate-800">${doc.fornitore || '-'}</td>
+                        <td class="p-3 border-r font-semibold text-emerald-800 whitespace-nowrap">${doc.tipoDoc} n. ${doc.numeroDoc}</td>
+                        <td class="p-3 border-r">${vociBadge}</td>
+                        <td class="p-3 border-r text-right font-extrabold text-slate-900 whitespace-nowrap">${formatValuta(doc.totaleDocumento)}</td>
+                        <td class="p-3 text-center space-x-1 whitespace-nowrap">
+                            <button type="button" onclick="modificaDocumentoMateriale('${doc.id}')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 rounded font-semibold">Modifica</button>
+                            <button type="button" onclick="eliminaDocumentoMateriale('${doc.id}')" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2 py-1 rounded font-semibold">Elimina</button>
+                        </td>
+                    </tr>
+                `;
+
+                cardsMob.innerHTML += `
+                    <div class="p-4 bg-white space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-xs font-bold text-emerald-800 uppercase">${doc.tipoDoc} n. ${doc.numeroDoc}</span>
+                                <h4 class="text-sm font-extrabold text-slate-900">${doc.cantiere}</h4>
+                                <span class="text-xs font-semibold text-slate-700 block">🏪 ${doc.fornitore || 'Fornitore non specificato'}</span>
+                                <span class="text-[11px] text-slate-500">📅 ${doc.data}</span>
+                            </div>
+                            <span class="text-sm font-extrabold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">${formatValuta(doc.totaleDocumento)}</span>
+                        </div>
+                        <div class="pt-1">${vociBadge}</div>
+                        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                            <button type="button" onclick="modificaDocumentoMateriale('${doc.id}')" class="bg-blue-50 text-blue-800 border border-blue-200 text-xs py-2 rounded-lg font-bold">✏️ Modifica</button>
+                            <button type="button" onclick="eliminaDocumentoMateriale('${doc.id}')" class="bg-red-50 text-red-800 border border-red-200 text-xs py-2 rounded-lg font-bold">🗑️ Elimina</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function aggiornaConsuntivoSeVisibile() {
+            const area = document.getElementById('areaRisultatiConsuntivo');
+            const cantiere = document.getElementById('selectCantiereConsuntivo').value;
+            if (!area.classList.contains('hidden') && cantiere) {
+                generaConsuntivoSchermo();
+            }
+        }
+
+        function calcolaDatiConsuntivo() {
+            const cantiere = document.getElementById('selectCantiereConsuntivo').value;
+            const dataInizio = document.getElementById('consuntivoDataInizio').value;
+            const dataFine = document.getElementById('consuntivoDataFine').value;
+            const tariffaManodopera = parseFloat(document.getElementById('costoOrarioManodopera').value) || 0;
+            const tariffaMezzi = parseFloat(document.getElementById('costoOrarioMezzi').value) || 0;
+
+            localStorage.setItem('gestionale_tariffa_manodopera', tariffaManodopera);
+            localStorage.setItem('gestionale_tariffa_mezzi', tariffaMezzi);
+
+            if (!cantiere) {
+                alert("Seleziona un cantiere per elaborare il consuntivo!");
+                return null;
+            }
+
+            const rapFiltrati = rapportini.filter(r => {
+                if (r.cantierePrincipale !== cantiere) return false;
+                if (dataInizio && r.data < dataInizio) return false;
+                if (dataFine && r.data > dataFine) return false;
+                return true;
+            });
+
+            const mappaOreDip = {};
+            let totaleOreManodopera = 0;
+
+            rapFiltrati.forEach(rap => {
+                rap.vociDipendenti.forEach(v => {
+                    const key = `${v.dipendente}|||${v.voce}`;
+                    if (!mappaOreDip[key]) {
+                        mappaOreDip[key] = { dipendente: v.dipendente, voce: v.voce, giorni: new Set(), ore: 0 };
+                    }
+                    mappaOreDip[key].giorni.add(rap.data);
+                    mappaOreDip[key].ore += v.ore;
+                    totaleOreManodopera += v.ore;
+                });
+            });
+
+            const mappaMezzi = {};
+            let totaleOreMezzi = 0;
+            rapFiltrati.forEach(rap => {
+                if (rap.mezziObj) {
+                    rap.mezziObj.forEach(mo => {
+                        if (!mappaMezzi[mo.nome]) {
+                            mappaMezzi[mo.nome] = { nome: mo.nome, giorni: new Set(), ore: 0 };
+                        }
+                        mappaMezzi[mo.nome].giorni.add(rap.data);
+                        mappaMezzi[mo.nome].ore += mo.ore;
+                        totaleOreMezzi += mo.ore;
+                    });
+                }
+            });
+
+            const costoTotaleManodopera = totaleOreManodopera * tariffaManodopera;
+            const costoTotaleMezzi = totaleOreMezzi * tariffaMezzi;
+
+            const matFiltrati = materialiDocs.filter(m => {
+                if (m.cantiere !== cantiere) return false;
+                if (dataInizio && m.data < dataInizio) return false;
+                if (dataFine && m.data > dataFine) return false;
+                return true;
+            }).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+            let totaleSpesaMateriali = 0;
+            matFiltrati.forEach(doc => {
+                totaleSpesaMateriali += doc.totaleDocumento;
+            });
+
+            const totaleGeneraleConsuntivo = costoTotaleManodopera + costoTotaleMezzi + totaleSpesaMateriali;
+
+            return {
+                cantiere,
+                dataInizio,
+                dataFine,
+                tariffaManodopera,
+                tariffaMezzi,
+                righeOreDip: Object.values(mappaOreDip),
+                righeMezzi: Object.values(mappaMezzi),
+                totaleOreManodopera,
+                totaleOreMezzi,
+                costoTotaleManodopera,
+                costoTotaleMezzi,
+                documentiMateriali: matFiltrati,
+                totaleSpesaMateriali,
+                totaleGeneraleConsuntivo
+            };
+        }
+
+        function generaConsuntivoSchermo() {
+            const dati = calcolaDatiConsuntivo();
+            if (!dati) return;
+
+            document.getElementById('areaRisultatiConsuntivo').classList.remove('hidden');
+            document.getElementById('titoloConsuntivoOutput').textContent = `Consuntivo: ${dati.cantiere}`;
+            
+            let periodoStr = "Periodo: Tutto lo storico registrato";
+            if (dati.dataInizio && dati.dataFine) periodoStr = `Periodo: dal ${dati.dataInizio} al ${dati.dataFine}`;
+            else if (dati.dataInizio) periodoStr = `Periodo: dal ${dati.dataInizio}`;
+            else if (dati.dataFine) periodoStr = `Periodo: fino al ${dati.dataFine}`;
+            document.getElementById('periodoConsuntivoOutput').textContent = periodoStr;
+
+            document.getElementById('kpiCostoManodopera').textContent = `${formatValuta(dati.costoTotaleManodopera)} (${dati.totaleOreManodopera.toFixed(1)}h)`;
+            document.getElementById('kpiCostoMezzi').textContent = `${formatValuta(dati.costoTotaleMezzi)} (${dati.totaleOreMezzi.toFixed(1)}h)`;
+            document.getElementById('kpiTotaleMateriali').textContent = formatValuta(dati.totaleSpesaMateriali);
+            document.getElementById('kpiTotaleGenerale').textContent = formatValuta(dati.totaleGeneraleConsuntivo);
+
+            const tbodyOre = document.getElementById('consuntivoTabellaOre');
+            tbodyOre.innerHTML = '';
+
+            if (dati.righeOreDip.length === 0 && dati.righeMezzi.length === 0) {
+                tbodyOre.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400 italic">Nessuna ora registrata per questo cantiere nel periodo selezionato.</td></tr>`;
+            } else {
+                dati.righeOreDip.forEach(r => {
+                    const importoRiga = r.ore * dati.tariffaManodopera;
+                    tbodyOre.innerHTML += `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-2.5 border-r font-semibold text-slate-800">👤 ${r.dipendente}</td>
+                            <td class="p-2.5 border-r text-slate-600">${r.voce}</td>
+                            <td class="p-2.5 border-r text-center text-slate-600">${r.giorni.size} gg</td>
+                            <td class="p-2.5 border-r text-right font-bold text-blue-900">${r.ore.toFixed(2)} h</td>
+                            <td class="p-2.5 border-r text-right text-slate-600">${formatValuta(dati.tariffaManodopera)}/h</td>
+                            <td class="p-2.5 text-right font-bold text-slate-900">${formatValuta(importoRiga)}</td>
+                        </tr>
+                    `;
+                });
+                dati.righeMezzi.forEach(m => {
+                    const importoMezzo = m.ore * dati.tariffaMezzi;
+                    tbodyOre.innerHTML += `
+                        <tr class="bg-amber-50/40 hover:bg-amber-50">
+                            <td class="p-2.5 border-r font-semibold text-amber-900">🚚 ${m.nome}</td>
+                            <td class="p-2.5 border-r text-amber-800">Utilizzo Automezzo</td>
+                            <td class="p-2.5 border-r text-center text-amber-800">${m.giorni.size} gg</td>
+                            <td class="p-2.5 border-r text-right font-bold text-amber-900">${m.ore.toFixed(2)} h</td>
+                            <td class="p-2.5 border-r text-right text-amber-800">${formatValuta(dati.tariffaMezzi)}/h</td>
+                            <td class="p-2.5 text-right font-bold text-amber-950">${formatValuta(importoMezzo)}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            const tbodyMatDet = document.getElementById('consuntivoTabellaMaterialiDettaglio');
+            tbodyMatDet.innerHTML = '';
+
+            if (dati.documentiMateriali.length === 0) {
+                tbodyMatDet.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 italic">Nessun costo materiale registrato per questo cantiere nel periodo selezionato.</td></tr>`;
+            } else {
+                dati.documentiMateriali.forEach(doc => {
+                    doc.voci.forEach(v => {
+                        tbodyMatDet.innerHTML += `
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-2.5 border-r text-slate-600 whitespace-nowrap">${doc.data}</td>
+                                <td class="p-2.5 border-r font-semibold text-slate-800 whitespace-nowrap">${doc.fornitore || '-'}</td>
+                                <td class="p-2.5 border-r text-slate-600 whitespace-nowrap">${doc.tipoDoc} ${doc.numeroDoc}</td>
+                                <td class="p-2.5 border-r text-slate-700">${v.descrizione}</td>
+                                <td class="p-2.5 border-r text-center text-slate-700">${v.quantita}</td>
+                                <td class="p-2.5 border-r text-right text-slate-600 whitespace-nowrap">${formatValuta(v.prezzoUnitario)}</td>
+                                <td class="p-2.5 text-right font-bold text-slate-900 whitespace-nowrap">${formatValuta(v.totaleRiga)}</td>
+                            </tr>
+                        `;
+                    });
+                });
+            }
+
+            const tbodyMatRiep = document.getElementById('consuntivoTabellaMaterialiRiepilogo');
+            tbodyMatRiep.innerHTML = '';
+            if (dati.documentiMateriali.length === 0) {
+                tbodyMatRiep.innerHTML = `<tr><td colspan="4" class="p-3 text-center text-slate-400 italic">Nessun documento.</td></tr>`;
+            } else {
+                dati.documentiMateriali.forEach(doc => {
+                    tbodyMatRiep.innerHTML += `
+                        <tr>
+                            <td class="p-2 border-r text-slate-600">${doc.data}</td>
+                            <td class="p-2 border-r font-semibold text-slate-800">${doc.fornitore || '-'}</td>
+                            <td class="p-2 border-r text-slate-600">${doc.tipoDoc} n. ${doc.numeroDoc}</td>
+                            <td class="p-2 text-right font-bold text-emerald-800">${formatValuta(doc.totaleDocumento)}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('sintesiOreManodopera').textContent = `${dati.totaleOreManodopera.toFixed(2)} h`;
+            document.getElementById('sintesiTariffaManodopera').textContent = `${formatValuta(dati.tariffaManodopera)}/h`;
+            document.getElementById('sintesiTotaleManodopera').textContent = formatValuta(dati.costoTotaleManodopera);
+
+            document.getElementById('sintesiOreMezzi').textContent = `${dati.totaleOreMezzi.toFixed(2)} h`;
+            document.getElementById('sintesiTariffaMezzi').textContent = `${formatValuta(dati.tariffaMezzi)}/h`;
+            document.getElementById('sintesiTotaleMezzi').textContent = formatValuta(dati.costoTotaleMezzi);
+
+            document.getElementById('sintesiNumDoc').textContent = dati.documentiMateriali.length;
+            document.getElementById('sintesiSpesaMateriali').textContent = formatValuta(dati.totaleSpesaMateriali);
+            document.getElementById('sintesiTotaleGenerale').textContent = formatValuta(dati.totaleGeneraleConsuntivo);
+        }
+
+        function esportaConsuntivoPDF() {
+            const dati = calcolaDatiConsuntivo();
+            if (!dati) return;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('portrait', 'mm', 'a4');
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            let imgElement = document.getElementById('logoAziendaleImg');
+            let imgData = null;
+            try {
+                let canvas = document.createElement('canvas');
+                canvas.width = imgElement.naturalWidth || 800;
+                canvas.height = imgElement.naturalHeight || 120;
+                let ctx = canvas.getContext('2d');
+                ctx.drawImage(imgElement, 0, 0);
+                imgData = canvas.toDataURL('image/jpeg');
+            } catch(e) {}
+
+            let startY = 12;
+            if (imgData) {
+                doc.addImage(imgData, 'JPEG', 14, 10, 182, 16);
+                startY = 30;
+            }
+
+            doc.setFillColor(30, 41, 59);
+            doc.rect(14, startY, 182, 11, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11);
+            doc.text(`CONSUNTIVO LAVORI - ${dati.cantiere.toUpperCase()}`, 105, startY + 7, { align: 'center' });
+            startY += 16;
+
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(9.5);
+            let periodoStr = "Periodo di riferimento: Tutto lo storico";
+            if (dati.dataInizio && dati.dataFine) periodoStr = `Periodo di riferimento: dal ${dati.dataInizio} al ${dati.dataFine}`;
+            else if (dati.dataInizio) periodoStr = `Periodo di riferimento: dal ${dati.dataInizio}`;
+            else if (dati.dataFine) periodoStr = `Periodo di riferimento: fino al ${dati.dataFine}`;
+            doc.text(periodoStr, 14, startY);
+            startY += 8;
+
+            function checkNewPage(neededHeight) {
+                if (startY + neededHeight > pageHeight - 15) {
+                    doc.addPage();
+                    startY = 18;
+                }
+            }
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10.5);
+            doc.setTextColor(30, 58, 138);
+            doc.text("1. RIEPILOGO ORE LAVORATE E COSTI (MANODOPERA E MEZZI)", 14, startY);
+            startY += 4;
+
+            doc.setFillColor(51, 51, 51);
+            doc.rect(14, startY, 182, 7, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.text("Risorsa / Dipendente", 16, startY + 4.8);
+            doc.text("Attività", 72, startY + 4.8);
+            doc.text("Pres.", 116, startY + 4.8, { align: 'center' });
+            doc.text("Ore", 138, startY + 4.8, { align: 'right' });
+            doc.text("Tariffa", 165, startY + 4.8, { align: 'right' });
+            doc.text("Importo", 193, startY + 4.8, { align: 'right' });
+            startY += 7;
+
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(30, 41, 59);
+
+            if (dati.righeOreDip.length === 0 && dati.righeMezzi.length === 0) {
+                doc.rect(14, startY, 182, 7);
+                doc.text("Nessuna ora registrata nel periodo.", 16, startY + 4.8);
+                startY += 7;
+            } else {
+                dati.righeOreDip.forEach((r, idx) => {
+                    checkNewPage(7);
+                    if (idx % 2 === 1) {
+                        doc.setFillColor(248, 250, 252);
+                        doc.rect(14, startY, 182, 7, 'F');
+                    }
+                    doc.setDrawColor(226, 232, 240);
+                    doc.rect(14, startY, 182, 7);
+                    const importoRiga = r.ore * dati.tariffaManodopera;
+                    doc.text(r.dipendente, 16, startY + 4.8);
+                    doc.text(r.voce, 72, startY + 4.8);
+                    doc.text(`${r.giorni.size} gg`, 116, startY + 4.8, { align: 'center' });
+                    doc.text(`${r.ore.toFixed(2)} h`, 138, startY + 4.8, { align: 'right' });
+                    doc.text(`${formatValuta(dati.tariffaManodopera)}/h`, 165, startY + 4.8, { align: 'right' });
+                    doc.setFont("helvetica", "bold");
+                    doc.text(formatValuta(importoRiga), 193, startY + 4.8, { align: 'right' });
+                    doc.setFont("helvetica", "normal");
+                    startY += 7;
+                });
+
+                dati.righeMezzi.forEach((m) => {
+                    checkNewPage(7);
+                    doc.setFillColor(255, 251, 235);
+                    doc.rect(14, startY, 182, 7, 'F');
+                    doc.setDrawColor(226, 232, 240);
+                    doc.rect(14, startY, 182, 7);
+                    const importoMezzo = m.ore * dati.tariffaMezzi;
+                    doc.text(`Mezzo: ${m.nome}`, 16, startY + 4.8);
+                    doc.text("Automezzo", 72, startY + 4.8);
+                    doc.text(`${m.giorni.size} gg`, 116, startY + 4.8, { align: 'center' });
+                    doc.text(`${m.ore.toFixed(2)} h`, 138, startY + 4.8, { align: 'right' });
+                    doc.text(`${formatValuta(dati.tariffaMezzi)}/h`, 165, startY + 4.8, { align: 'right' });
+                    doc.setFont("helvetica", "bold");
+                    doc.text(formatValuta(importoMezzo), 193, startY + 4.8, { align: 'right' });
+                    doc.setFont("helvetica", "normal");
+                    startY += 7;
+                });
+            }
+
+            checkNewPage(14);
+            doc.setFillColor(239, 246, 255);
+            doc.rect(14, startY, 182, 7, 'F');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(30, 58, 138);
+            doc.text(`Subtotale Manodopera (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 16, startY + 4.8);
+            doc.text(formatValuta(dati.costoTotaleManodopera), 193, startY + 4.8, { align: 'right' });
+            startY += 7;
+
+            doc.setFillColor(254, 243, 199);
+            doc.rect(14, startY, 182, 7, 'F');
+            doc.setTextColor(146, 64, 14);
+            doc.text(`Subtotale Automezzi (${dati.totaleOreMezzi.toFixed(2)} h × ${formatValuta(dati.tariffaMezzi)}/h):`, 16, startY + 4.8);
+            doc.text(formatValuta(dati.costoTotaleMezzi), 193, startY + 4.8, { align: 'right' });
+            startY += 13;
+
+            checkNewPage(20);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10.5);
+            doc.setTextColor(6, 95, 70);
+            doc.text("2. DETTAGLIO COSTI MATERIALI (DDT / FATTURE)", 14, startY);
+            startY += 4;
+
+            doc.setFillColor(51, 51, 51);
+            doc.rect(14, startY, 182, 7, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.text("Data", 16, startY + 4.8);
+            doc.text("Fornitore / Doc", 36, startY + 4.8);
+            doc.text("Descrizione Materiale", 78, startY + 4.8);
+            doc.text("Q.tà", 142, startY + 4.8, { align: 'center' });
+            doc.text("Prezzo U.", 168, startY + 4.8, { align: 'right' });
+            doc.text("Totale", 193, startY + 4.8, { align: 'right' });
+            startY += 7;
+
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(30, 41, 59);
+
+            if (dati.documentiMateriali.length === 0) {
+                doc.rect(14, startY, 182, 7);
+                doc.text("Nessun costo materiale registrato nel periodo.", 16, startY + 4.8);
+                startY += 7;
+            } else {
+                let rowCounter = 0;
+                dati.documentiMateriali.forEach(dMat => {
+                    dMat.voci.forEach(v => {
+                        checkNewPage(7);
+                        if (rowCounter % 2 === 1) {
+                            doc.setFillColor(248, 250, 252);
+                            doc.rect(14, startY, 182, 7, 'F');
+                        }
+                        doc.setDrawColor(226, 232, 240);
+                        doc.rect(14, startY, 182, 7);
+
+                        let descTrunc = v.descrizione.length > 32 ? v.descrizione.substring(0, 30) + '..' : v.descrizione;
+                        let rifFornitore = `${dMat.fornitore || '-'} (${dMat.tipoDoc} ${dMat.numeroDoc})`;
+                        if (rifFornitore.length > 22) rifFornitore = rifFornitore.substring(0, 20) + '..';
+
+                        doc.text(dMat.data, 16, startY + 4.8);
+                        doc.text(rifFornitore, 36, startY + 4.8);
+                        doc.text(descTrunc, 78, startY + 4.8);
+                        doc.text(String(v.quantita), 142, startY + 4.8, { align: 'center' });
+                        doc.text(formatValuta(v.prezzoUnitario), 168, startY + 4.8, { align: 'right' });
+                        doc.setFont("helvetica", "bold");
+                        doc.text(formatValuta(v.totaleRiga), 193, startY + 4.8, { align: 'right' });
+                        doc.setFont("helvetica", "normal");
+
+                        startY += 7;
+                        rowCounter++;
+                    });
+                });
+            }
+
+            checkNewPage(10);
+            doc.setFillColor(209, 250, 229);
+            doc.rect(14, startY, 182, 7.5, 'F');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(6, 95, 70);
+            doc.text("Subtotale Costo Materiali:", 16, startY + 5);
+            doc.text(formatValuta(dati.totaleSpesaMateriali), 193, startY + 5, { align: 'right' });
+            startY += 13;
+
+            if (dati.documentiMateriali.length > 0) {
+                checkNewPage(25);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(30, 41, 59);
+                doc.text("3. RIEPILOGO DOCUMENTI DI SPESA (DDT / FATTURE)", 14, startY);
+                startY += 4;
+
+                dati.documentiMateriali.forEach(dMat => {
+                    checkNewPage(6.5);
+                    doc.setDrawColor(203, 213, 225);
+                    doc.rect(14, startY, 182, 6.5);
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8.5);
+                    doc.text(`${dMat.data}  -  Fornitore: ${dMat.fornitore || '-'}  -  ${dMat.tipoDoc} n. ${dMat.numeroDoc}`, 16, startY + 4.5);
+                    doc.setFont("helvetica", "bold");
+                    doc.text(formatValuta(dMat.totaleDocumento), 193, startY + 4.5, { align: 'right' });
+                    startY += 6.5;
+                });
+                startY += 8;
+            }
+
+            checkNewPage(40);
+            doc.setFillColor(241, 245, 249);
+            doc.setDrawColor(148, 163, 184);
+            doc.rect(14, startY, 182, 34, 'FD');
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(15, 23, 42);
+            doc.text("RIEPILOGO ECONOMICO GENERALE CONSUNTIVO", 18, startY + 6.5);
+            doc.line(18, startY + 8.5, 192, startY + 8.5);
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            doc.text(`• Totale Manodopera (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 18, startY + 14);
+            doc.setFont("helvetica", "bold");
+            doc.text(formatValuta(dati.costoTotaleManodopera), 192, startY + 14, { align: 'right' });
+
+            doc.setFont("helvetica", "normal");
+            doc.text(`• Totale Automezzi (${dati.totaleOreMezzi.toFixed(2)} h × ${formatValuta(dati.tariffaMezzi)}/h):`, 18, startY + 19.5);
+            doc.setFont("helvetica", "bold");
+            doc.text(formatValuta(dati.costoTotaleMezzi), 192, startY + 19.5, { align: 'right' });
+
+            doc.setFont("helvetica", "normal");
+            doc.text(`• Totale Materiali (${dati.documentiMateriali.length} documenti DDT/Fatture):`, 18, startY + 25);
+            doc.setFont("helvetica", "bold");
+            doc.text(formatValuta(dati.totaleSpesaMateriali), 192, startY + 25, { align: 'right' });
+
+            startY += 28;
+            doc.setFillColor(30, 41, 59);
+            doc.rect(14, startY, 182, 9.5, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10.5);
+            doc.text("TOTALE GENERALE CONSUNTIVO LAVORI:", 18, startY + 6.3);
+            doc.text(formatValuta(dati.totaleGeneraleConsuntivo), 192, startY + 6.3, { align: 'right' });
+
+            const nomeFile = `Consuntivo_Lavori_${dati.cantiere.replace(/\s+/g, '_')}.pdf`;
+            doc.save(nomeFile);
+
+            const dataCartella = dati.dataFine || new Date().toISOString().split('T')[0];
+            inviaPDFAlCloud(dataCartella, nomeFile, doc, "Report commesse");
+        }
+
+        function selezionaTuttiRapportini(stato) {
+            document.querySelectorAll('.chk-rapportino-select').forEach(chk => chk.checked = stato);
+        }
+
+        function toggleMezzoOre(checkbox) {
+            let mezzoName = checkbox.value;
+            let inputOreMezzo = document.getElementById(`ore_mezzo_${mezzoName}`);
+            if (checkbox.checked) {
+                inputOreMezzo.classList.remove('hidden');
+            } else {
+                inputOreMezzo.classList.add('hidden');
+            }
+        }
+
+        function aggiungiDipendente() {
+            let val = document.getElementById('nuovoDipendente').value.trim();
+            if (val && !dipendenti.includes(val)) { dipendenti.push(val); document.getElementById('nuovoDipendente').value = ''; salvaStorage(); }
+        }
+        function aggiungiCantiere() {
+            let val = document.getElementById('nuovoCantiere').value.trim();
+            let colore = document.getElementById('coloreCantiere').value;
+            if (val && !cantieri.some(c => c.nome === val)) { 
+                cantieri.push({nome: val, colore: colore}); 
+                document.getElementById('nuovoCantiere').value = ''; 
+                salvaStorage(); 
+            }
+        }
+        function aggiungiCausale() {
+            let val = document.getElementById('nuovaCausale').value.trim();
+            let colore = document.getElementById('coloreCausale').value;
+            if (val && !causali.some(c => c.nome === val)) { 
+                causali.push({nome: val, colore: colore}); 
+                document.getElementById('nuovaCausale').value = ''; 
+                salvaStorage(); 
+            }
+        }
+        function aggiungiAutomezzo() {
+            let val = document.getElementById('nuovoAutomezzo').value.trim();
+            if (val && !automezzi.includes(val)) { automezzi.push(val); document.getElementById('nuovoAutomezzo').value = ''; salvaStorage(); }
+        }
+
+        function eliminaElemento(tipo, idx) {
+            if (tipo === 'dipendenti') dipendenti.splice(idx, 1);
+            if (tipo === 'cantieri') cantieri.splice(idx, 1);
+            if (tipo === 'causali') causali.splice(idx, 1);
+            if (tipo === 'automezzi') automezzi.splice(idx, 1);
+            salvaStorage();
+        }
+
+        function caricaUltimoRapportinoPerCantiere(cantiereNome) {
+            if (!cantiereNome) return;
+            let ultimo = rapportini.slice().reverse().find(r => r.cantierePrincipale === cantiereNome);
+            if (!ultimo) return;
+
+            document.getElementById('inputNote').value = ultimo.note || '';
+            document.getElementById('inputRilievi').value = ultimo.rilievi || '';
+
+            renderizzaListaDipendentiOre(ultimo.vociDipendenti);
+
+            document.querySelectorAll('.chk-ins-mezzo').forEach(cb => {
+                let mName = cb.value;
+                let foundMezzo = ultimo.mezziObj && ultimo.mezziObj.find(mo => mo.nome === mName);
+                if (foundMezzo) {
+                    cb.checked = true;
+                    let inputOreMezzo = document.getElementById(`ore_mezzo_${mName}`);
+                    if (inputOreMezzo) {
+                        inputOreMezzo.classList.remove('hidden');
+                        inputOreMezzo.value = foundMezzo.ore;
+                    }
+                } else {
+                    cb.checked = false;
+                }
+            });
+        }
+
+        function copiaRapportino(index) {
+            let rap = rapportini[index];
+            if (window.innerWidth < 768) cambiaSchedaMobile('rapportino');
+
+            document.getElementById('selectCantiereGlobale').value = rap.cantierePrincipale;
+            document.getElementById('inputNote').value = rap.note || '';
+            document.getElementById('inputRilievi').value = rap.rilievi || '';
+            document.getElementById('editSessionId').value = '';
+
+            document.getElementById('formTitle').textContent = "📋 Copia Rapportino (Modifica Data)";
+            document.getElementById('editBadge').classList.remove('hidden');
+            document.getElementById('btnSalva').textContent = "💾 Salva Come Nuovo Rapportino";
+            document.getElementById('btnAnnulla').classList.remove('hidden');
+
+            renderizzaListaDipendentiOre(rap.vociDipendenti);
+
+            document.querySelectorAll('.chk-ins-mezzo').forEach(cb => {
+                let mName = cb.value;
+                let foundMezzo = rap.mezziObj && rap.mezziObj.find(mo => mo.nome === mName);
+                if (foundMezzo) {
+                    cb.checked = true;
+                    let inputOreMezzo = document.getElementById(`ore_mezzo_${mName}`);
+                    if (inputOreMezzo) {
+                        inputOreMezzo.classList.remove('hidden');
+                        inputOreMezzo.value = foundMezzo.ore;
+                    }
+                } else {
+                    cb.checked = false;
+                }
+            });
+
+            document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function registraPresenzeIndividuali() {
+            let data = document.getElementById('inputData').value;
+            let cantierePrincipale = document.getElementById('selectCantiereGlobale').value;
+            let note = document.getElementById('inputNote').value.trim();
+            let rilievi = document.getElementById('inputRilievi').value.trim();
+            let editSessionId = document.getElementById('editSessionId').value;
+
+            if (!data || !cantierePrincipale) {
+                alert("Seleziona la data e il Cantiere / Causale principale in alto!");
+                return;
+            }
+
+            let righeDip = document.querySelectorAll('.row-dipendente-ore');
+            let vociDipendenti = [];
+
+            righeDip.forEach(row => {
+                let chk = row.querySelector('.chk-attivo-dep');
+                if (chk && chk.checked) {
+                    let dip = row.dataset.dipendente;
+                    let ore = parseFloat(row.querySelector('.input-ore-dep').value) || 0;
+                    let voce = row.querySelector('.select-causale-dep').value;
+
+                    if (ore > 0) {
+                        vociDipendenti.push({
+                            dipendente: dip,
+                            voce: voce ? voce : cantierePrincipale,
+                            ore: ore
+                        });
+                    }
+                }
+            });
+
+            if (vociDipendenti.length === 0) {
+                alert("Seleziona almeno un dipendente e inserisci le ore (> 0)!");
+                return;
+            }
+
+            let mezziObjScelti = [];
+            document.querySelectorAll('.chk-ins-mezzo:checked').forEach(cb => {
+                let mName = cb.value;
+                let mOreInput = document.getElementById(`ore_mezzo_${mName}`);
+                let mOre = mOreInput ? parseFloat(mOreInput.value) || 8 : 8;
+                mezziObjScelti.push({ nome: mName, ore: mOre });
+            });
+
+            let nuovoRapportino = {
+                id: editSessionId ? editSessionId : 'rap_' + Date.now(),
+                data,
+                cantierePrincipale,
+                vociDipendenti,
+                mezziObj: mezziObjScelti,
+                note,
+                rilievi
+            };
+
+            if (editSessionId) {
+                let idx = rapportini.findIndex(r => r.id === editSessionId);
+                if (idx > -1) rapportini[idx] = nuovoRapportino;
+            } else {
+                rapportini.push(nuovoRapportino);
+            }
+
+            resetForm();
+            salvaStorage();
+
+            generaPDFOggetto(nuovoRapportino, false);
+        }
+
+        function modificaRapportino(index) {
+            let rap = rapportini[index];
+            if (window.innerWidth < 768) cambiaSchedaMobile('rapportino');
+
+            document.getElementById('inputData').value = rap.data;
+            document.getElementById('selectCantiereGlobale').value = rap.cantierePrincipale;
+            document.getElementById('inputNote').value = rap.note || '';
+            document.getElementById('inputRilievi').value = rap.rilievi || '';
+            document.getElementById('editSessionId').value = rap.id;
+
+            document.getElementById('formTitle').textContent = "✏️ Modifica Rapportino";
+            document.getElementById('editBadge').classList.remove('hidden');
+            document.getElementById('btnSalva').textContent = "Aggiorna & Sovrascrivi su Drive";
+            document.getElementById('btnAnnulla').classList.remove('hidden');
+
+            renderizzaListaDipendentiOre(rap.vociDipendenti);
+
+            document.querySelectorAll('.chk-ins-mezzo').forEach(cb => {
+                let mName = cb.value;
+                let foundMezzo = rap.mezziObj && rap.mezziObj.find(mo => mo.nome === mName);
+                if (foundMezzo) {
+                    cb.checked = true;
+                    let inputOreMezzo = document.getElementById(`ore_mezzo_${mName}`);
+                    if (inputOreMezzo) {
+                        inputOreMezzo.classList.remove('hidden');
+                        inputOreMezzo.value = foundMezzo.ore;
+                    }
+                } else {
+                    cb.checked = false;
+                }
+            });
+
+            document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function resetForm() {
+            document.getElementById('editSessionId').value = '';
+            document.getElementById('formTitle').textContent = "📝 Rapportino Giornaliero";
+            document.getElementById('editBadge').classList.add('hidden');
+            document.getElementById('btnSalva').textContent = "💾 Registra & Salva PDF su Drive";
+            document.getElementById('btnAnnulla').classList.add('hidden');
+            document.getElementById('selectCantiereGlobale').value = '';
+            document.getElementById('inputNote').value = '';
+            document.getElementById('inputRilievi').value = '';
+            
+            renderizzaListaDipendentiOre();
+            document.querySelectorAll('.chk-ins-mezzo').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.input-mezzo-ore').forEach(inp => inp.classList.add('hidden'));
+        }
+
+        function eliminaRapportino(index) {
+            if (confirm("Vuoi eliminare questo rapportino dal gestionale? (Il file su Google Drive non verrà toccato)")) {
+                rapportini.splice(index, 1);
+                salvaStorage();
+            }
+        }
+
+        function cancellaTutto() {
+            if (confirm("Sei sicuro di voler svuotare lo storico locale dei rapportini?")) {
+                rapportini = [];
+                salvaStorage();
+            }
+        }
+
+        function generaPDFRapportinoSingolo(index) {
+            let rap = rapportini[index];
+            generaPDFOggetto(rap, true);
+        }
+
+        function generaPDFOggetto(rap, scaricaAncheSulTelefono = true) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            let imgElement = document.getElementById('logoAziendaleImg');
+            let imgData = null;
+            try {
+                let canvas = document.createElement('canvas');
+                canvas.width = imgElement.naturalWidth || 800;
+                canvas.height = imgElement.naturalHeight || 120;
+                let ctx = canvas.getContext('2d');
+                ctx.drawImage(imgElement, 0, 0);
+                imgData = canvas.toDataURL('image/jpeg');
+            } catch(e) {}
+
+            if (imgData) {
+                doc.addImage(imgData, 'JPEG', 14, 10, 182, 16);
+            }
+
+            doc.setFillColor(30, 41, 59);
+            doc.rect(14, 30, 182, 10, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11);
+            doc.text("RAPPORTINO GIORNALIERO DI CANTIERE", 105, 36.5, { align: 'center' });
+
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(10);
+            doc.text(`Data Intervento:`, 14, 48);
+            doc.setFont("helvetica", "normal");
+            doc.text(`${rap.data}`, 50, 48);
+
+            doc.setFont("helvetica", "bold");
+            doc.text(`Cantiere:`, 14, 55);
+            doc.setFont("helvetica", "normal");
+            doc.text(`${rap.cantierePrincipale}`, 50, 55);
+
+            doc.setDrawColor(203, 213, 225);
+            doc.line(14, 60, 196, 60);
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11);
+            doc.text("Personale Coinvolto e Ore:", 14, 70);
+
+            let startY = 75;
+            doc.setFillColor(51, 51, 51);
+            doc.rect(14, startY, 110, 7, 'F');
+            doc.rect(124, startY, 72, 7, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(9);
+            doc.text("Dipendente", 18, startY + 5);
+            doc.text("Attività / Ore", 128, startY + 5);
+
+            startY += 7;
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(30, 41, 59);
+
+            rap.vociDipendenti.forEach((v, idx) => {
+                if (idx % 2 === 1) {
+                    doc.setFillColor(248, 250, 252);
+                    doc.rect(14, startY, 110, 7, 'F');
+                    doc.rect(124, startY, 72, 7, 'F');
+                }
+                doc.setDrawColor(226, 232, 240);
+                doc.rect(14, startY, 110, 7);
+                doc.rect(124, startY, 72, 7);
+
+                doc.text(v.dipendente, 18, startY + 4.5);
+                doc.text(`${v.voce} (${v.ore}h)`, 128, startY + 4.5);
+                startY += 7;
+            });
+
+            startY += 10;
+
+            if (rap.mezziObj && rap.mezziObj.length > 0) {
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(11);
+                doc.text("Automezzi Utilizzati:", 14, startY);
+                startY += 5;
+
+                doc.setFillColor(51, 51, 51);
+                doc.rect(14, startY, 110, 7, 'F');
+                doc.rect(124, startY, 72, 7, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(9);
+                doc.text("Automezzo", 18, startY + 5);
+                doc.text("Ore Utilizzo", 128, startY + 5);
+
+                startY += 7;
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(30, 41, 59);
+
+                rap.mezziObj.forEach((mo) => {
+                    doc.setDrawColor(226, 232, 240);
+                    doc.rect(14, startY, 110, 7);
+                    doc.rect(124, startY, 72, 7);
+                    doc.text(mo.nome, 18, startY + 4.5);
+                    doc.text(`${mo.ore} ore`, 128, startY + 4.5);
+                    startY += 7;
+                });
+                startY += 10;
+            }
+
+            if (rap.note) {
+                doc.setFont("helvetica", "bold");
+                doc.text("Note di Cantiere:", 14, startY);
+                startY += 5;
+                doc.setFont("helvetica", "normal");
+                doc.text(rap.note, 14, startY, { maxWidth: 180 });
+                startY += 15;
+            }
+
+            if (rap.rilievi) {
+                doc.setFont("helvetica", "bold");
+                doc.text("Rilievi Misure / Lavorazioni:", 14, startY);
+                startY += 5;
+                doc.setFont("helvetica", "normal");
+                doc.text(rap.rilievi, 14, startY, { maxWidth: 180 });
+                startY += 15;
+            }
+
+            startY = Math.max(startY + 15, 230);
+            doc.setDrawColor(150, 150, 150);
+            doc.line(14, startY, 80, startY);
+            doc.line(130, startY, 196, startY);
+
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("Firma Capocantiere / Operatore", 14, startY + 5);
+            doc.text("Firma Committente / Responsabile", 130, startY + 5);
+
+            const dataFormattataDDMMYY = formattaDataDDMMYY(rap.data);
+            const nomeFile = `Rapportino_${rap.cantierePrincipale.replace(/\s+/g, '_')}_${dataFormattataDDMMYY}.pdf`;
+
+            if (scaricaAncheSulTelefono) {
+                doc.save(nomeFile);
+            }
+
+            inviaPDFAlCloud(rap.data, nomeFile, doc, "Rapportini giornalieri");
+        }
+
+        function scaricaSelezionatiPDF() {
+            let checkboxes = document.querySelectorAll('.chk-rapportino-select:checked');
+            if (checkboxes.length === 0) {
+                alert("Seleziona almeno un rapportino spuntando la casella nello storico!");
+                return;
+            }
+            const indiciUnici = Array.from(new Set(Array.from(checkboxes).map(cb => parseInt(cb.value))));
+            indiciUnici.forEach((idx, i) => {
+                setTimeout(() => {
+                    generaPDFOggetto(rapportini[idx], true);
+                }, i * 400);
+            });
+        }
+
+        function scaricaMassivoPerDate() {
+            let dataInizio = document.getElementById('dataMassivaInizio').value;
+            let dataFine = document.getElementById('dataMassivaFine').value;
+
+            if (!dataInizio || !dataFine) {
+                alert("Inserisci sia la data di inizio che la data di fine!");
+                return;
+            }
+
+            let filtrati = rapportini.filter(r => r.data >= dataInizio && r.data <= dataFine);
+            if (filtrati.length === 0) {
+                alert("Nessun rapportino trovato nell'intervallo di date selezionato!");
+                return;
+            }
+
+            filtrati.forEach((rap, i) => {
+                setTimeout(() => {
+                    generaPDFOggetto(rap, true);
+                }, i * 400);
+            });
+        }
+
+        function getOreDipendenteGiorno(dep, dataStr, voceCantiere) {
+            let totale = 0;
+            rapportini.forEach(rap => {
+                if (rap.data === dataStr) {
+                    rap.vociDipendenti.forEach(v => {
+                        if (v.dipendente === dep && v.voce === voceCantiere) {
+                            totale += v.ore;
+                        }
+                    });
+                }
+            });
+            return totale;
+        }
+
+        function esportaTabellaPDF() {
+            let meseInput = document.getElementById('inputMese').value;
+            if (!meseInput) { alert("Seleziona un mese di riferimento!"); return; }
+
+            let [anno, mese] = meseInput.split('-').map(Number);
+            let dipendentiScelti = Array.from(document.querySelectorAll('.chk-exp-dep:checked')).map(cb => cb.value);
+
+            if (dipendentiScelti.length === 0) { alert("Seleziona almeno un dipendente!"); return; }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape', 'mm', 'a4');
+
+            const mesiIt = ["", "GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO", "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"];
+            const giorniAbbr = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+            const nomeMeseStr = mesiIt[mese];
+            const numGiorni = new Date(anno, mese, 0).getDate();
+
+            let imgElement = document.getElementById('logoAziendaleImg');
+            let imgData = null;
+            try {
+                let canvas = document.createElement('canvas');
+                canvas.width = imgElement.naturalWidth || 800;
+                canvas.height = imgElement.naturalHeight || 120;
+                let ctx = canvas.getContext('2d');
+                ctx.drawImage(imgElement, 0, 0);
+                imgData = canvas.toDataURL('image/jpeg');
+            } catch(e) {}
+
+            let startY = 12;
+            let pageHeight = doc.internal.pageSize.getHeight();
+
+            function disegnaIntestazionePagina() {
+                if (imgData) doc.addImage(imgData, 'JPEG', 14, 8, 269, 14);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(11);
+                doc.setTextColor(30, 41, 59);
+                doc.text(`REPORT ORE MENSILI "${nomeMeseStr} ${anno}"`, 148.5, 27, { align: 'center' });
+            }
+
+            disegnaIntestazionePagina();
+            startY = 33;
+
+            dipendentiScelti.forEach((dep) => {
+                let vociUsateDip = new Set();
+                rapportini.forEach(rap => {
+                    let [pAnno, pMese] = rap.data.split('-').map(Number);
+                    if (pAnno === anno && pMese === mese) {
+                        rap.vociDipendenti.forEach(v => {
+                            if (v.dipendente === dep) vociUsateDip.add(v.voce);
+                        });
+                    }
+                });
+
+                let listaCantieriFin = cantieri.filter(c => vociUsateDip.has(c.nome) || vociUsateDip.size === 0);
+                let listaCausaliFin = causali.filter(c => vociUsateDip.has(c.nome) || vociUsateDip.size === 0);
+                let elencoCompleto = [...listaCantieriFin, ...listaCausaliFin];
+
+                let altezzaTabellaStimata = 14 + (elencoCompleto.length * 7) + 10;
+
+                if (startY + altezzaTabellaStimata > pageHeight - 15) {
+                    doc.addPage();
+                    disegnaIntestazionePagina();
+                    startY = 33;
+                }
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(192, 0, 0);
+                doc.text(`Dipendente: ${dep}`, 14, startY);
+
+                let cellW = 7.2; 
+                let startX = 52;
+                let topY = startY + 4;
+                let cellH = 6.5;
+
+                doc.setFillColor(51, 51, 51);
+                doc.rect(startX, topY, cellW * numGiorni + 12, 9, 'F');
+                doc.setFontSize(7.5);
+                doc.setTextColor(255, 255, 255);
+
+                for (let g = 1; g <= numGiorni; g++) {
+                    let dateObj = new Date(anno, mese - 1, g);
+                    let dow = dateObj.getDay();
+                    let isFestivo = (dow === 0 || dow === 6);
+                    let x = startX + (g - 1) * cellW;
+
+                    if (isFestivo) {
+                        doc.setFillColor(255, 192, 0);
+                        doc.rect(x, topY, cellW, 9, 'F');
+                        doc.setTextColor(192, 0, 0);
+                    } else {
+                        doc.setTextColor(255, 255, 255);
+                    }
+
+                    doc.text(giorniAbbr[dow], x + cellW / 2, topY + 3, { align: 'center' });
+                    doc.text(String(g).padStart(2, '0'), x + cellW / 2, topY + 7, { align: 'center' });
+                }
+
+                doc.setFillColor(51, 51, 51);
+                doc.rect(startX + numGiorni * cellW, topY, 12, 9, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.text("TOTALE", startX + numGiorni * cellW + 6, topY + 3, { align: 'center' });
+                doc.text("ORE", startX + numGiorni * cellW + 6, topY + 7, { align: 'center' });
+
+                let currentY = topY + 9;
+                let totaliGiornalieri = new Array(numGiorni + 1).fill(0);
+
+                elencoCompleto.forEach((item) => {
+                    let hexColore = item.colore || "#E2EFDA";
+                    let r = parseInt(hexColore.substring(1, 3), 16) || 220;
+                    let g = parseInt(hexColore.substring(3, 5), 16) || 230;
+                    let b = parseInt(hexColore.substring(5, 7), 16) || 242;
+
+                    doc.setFillColor(r, g, b);
+                    doc.rect(14, currentY, 38, cellH, 'F');
+                    doc.setFontSize(7.5);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(30, 41, 59);
+                    let nomeTroncato = item.nome.length > 20 ? item.nome.substring(0, 18) + '...' : item.nome;
+                    doc.text(nomeTroncato, 16, currentY + 4.2);
+
+                    let totOreVoce = 0;
+                    for (let d = 1; d <= numGiorni; d++) {
+                        let dateObj = new Date(anno, mese - 1, d);
+                        let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
+                        let x = startX + (d - 1) * cellW;
+
+                        doc.setDrawColor(210, 215, 220);
+                        if (isFestivo) {
+                            doc.setFillColor(255, 242, 204);
+                            doc.rect(x, currentY, cellW, cellH, 'F');
+                        } else {
+                            doc.setFillColor(r, g, b);
+                            doc.rect(x, currentY, cellW, cellH, 'F');
+                        }
+                        doc.rect(x, currentY, cellW, cellH);
+
+                        let dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        let oreGiornoVoce = getOreDipendenteGiorno(dep, dataStr, item.nome);
+
+                        if (oreGiornoVoce > 0) {
+                            doc.setFont("helvetica", "bold");
+                            doc.setTextColor(30, 41, 59);
+                            doc.text(String(oreGiornoVoce), x + cellW / 2, currentY + 4.2, { align: 'center' });
+                            totOreVoce += oreGiornoVoce;
+                            totaliGiornalieri[d] += oreGiornoVoce;
+                        }
+                    }
+
+                    doc.setFillColor(230, 235, 240);
+                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH, 'F');
+                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(30, 41, 59);
+                    doc.text(totOreVoce.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.2, { align: 'center' });
+
+                    currentY += cellH;
+                });
+
+                doc.setFillColor(217, 217, 217);
+                doc.rect(14, currentY, 38, 7, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(6.5);
+                doc.setTextColor(30, 41, 59);
+                doc.text("TOTALE ORE GIORNALIERO", 16, currentY + 4.5);
+
+                let totaleComplessivoMese = 0;
+                for (let d = 1; d <= numGiorni; d++) {
+                    let dateObj = new Date(anno, mese - 1, d);
+                    let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
+                    let x = startX + (d - 1) * cellW;
+
+                    if (isFestivo) {
+                        doc.setFillColor(255, 242, 204);
+                        doc.rect(x, currentY, cellW, 7, 'F');
+                    } else {
+                        doc.setFillColor(217, 217, 217);
+                        doc.rect(x, currentY, cellW, 7, 'F');
+                    }
+                    doc.rect(x, currentY, cellW, 7);
+
+                    if (totaliGiornalieri[d] > 0) {
+                        doc.setFontSize(7.5);
+                        doc.text(String(totaliGiornalieri[d]), x + cellW / 2, currentY + 4.5, { align: 'center' });
+                        totaleComplessivoMese += totaliGiornalieri[d];
+                    }
+                }
+
+                doc.setFillColor(200, 205, 210);
+                doc.rect(startX + numGiorni * cellW, currentY, 12, 7, 'F');
+                doc.rect(startX + numGiorni * cellW, currentY, 12, 7);
+                doc.setFontSize(7.5);
+                doc.text(totaleComplessivoMese.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.5, { align: 'center' });
+
+                startY = currentY + 12;
+            });
+
+            const nomeFile = `Tabella_Presenze_Mensile_${nomeMeseStr}_${anno}.pdf`;
+            doc.save(nomeFile);
+
+            inviaPDFAlCloud(`${meseInput}-01`, nomeFile, doc, "Report mensili");
+        }
+
+        function esportaCantierePDF() {
+            let meseInput = document.getElementById('inputMeseCantiere').value;
+            let cantiereScelto = document.getElementById('selectCantiereExport').value;
+
+            if (!meseInput || !cantiereScelto) {
+                alert("Seleziona un mese e un cantiere validi!");
+                return;
+            }
+
+            let [anno, mese] = meseInput.split('-').map(Number);
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape', 'mm', 'a4');
+
+            const mesiIt = ["", "GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO", "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"];
+            const giorniAbbr = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+            const nomeMeseStr = mesiIt[mese];
+            const numGiorni = new Date(anno, mese, 0).getDate();
+
+            let imgElement = document.getElementById('logoAziendaleImg');
+            let imgData = null;
+            try {
+                let canvas = document.createElement('canvas');
+                canvas.width = imgElement.naturalWidth || 800;
+                canvas.height = imgElement.naturalHeight || 120;
+                let ctx = canvas.getContext('2d');
+                ctx.drawImage(imgElement, 0, 0);
+                imgData = canvas.toDataURL('image/jpeg');
+            } catch(e) {}
+
+            function disegnaIntestazioneCantiere() {
+                if (imgData) doc.addImage(imgData, 'JPEG', 14, 8, 269, 14);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(11);
+                doc.setTextColor(30, 41, 59);
+                doc.text(`REPORT MENSILE CANTIERE "${cantiereScelto.toUpperCase()}" "${nomeMeseStr} ${anno}"`, 148.5, 27, { align: 'center' });
+            }
+
+            disegnaIntestazioneCantiere();
+            let startY = 33;
+
+            let dipendentiSulCantiere = new Set();
+            rapportini.forEach(rap => {
+                let [pAnno, pMese] = rap.data.split('-').map(Number);
+                if (rap.cantierePrincipale === cantiereScelto && pAnno === anno && pMese === mese) {
+                    rap.vociDipendenti.forEach(v => {
+                        if (v.voce === cantiereScelto) dipendentiSulCantiere.add(v.dipendente);
+                    });
+                }
+            });
+
+            if (dipendentiSulCantiere.size === 0) {
+                alert("Nessuna registrazione trovata per questo cantiere nel mese selezionato!");
+                return;
+            }
+
+            let cellW = 7.2;
+            let startX = 52;
+            let topY = startY + 4;
+            let cellH = 6.5;
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(192, 0, 0);
+            doc.text(`Ore Lavorate per Dipendente`, 14, startY);
+
+            doc.setFillColor(51, 51, 51);
+            doc.rect(startX, topY, cellW * numGiorni + 12, 9, 'F');
+            doc.setFontSize(7.5);
+            doc.setTextColor(255, 255, 255);
+
+            for (let g = 1; g <= numGiorni; g++) {
+                let dateObj = new Date(anno, mese - 1, g);
+                let dow = dateObj.getDay();
+                let isFestivo = (dow === 0 || dow === 6);
+                let x = startX + (g - 1) * cellW;
+
+                if (isFestivo) {
+                    doc.setFillColor(255, 192, 0);
+                    doc.rect(x, topY, cellW, 9, 'F');
+                    doc.setTextColor(192, 0, 0);
+                } else {
+                    doc.setTextColor(255, 255, 255);
+                }
+                doc.text(giorniAbbr[dow], x + cellW / 2, topY + 3, { align: 'center' });
+                doc.text(String(g).padStart(2, '0'), x + cellW / 2, topY + 7, { align: 'center' });
+            }
+
+            doc.setFillColor(51, 51, 51);
+            doc.rect(startX + numGiorni * cellW, topY, 12, 9, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text("TOTALE", startX + numGiorni * cellW + 6, topY + 3, { align: 'center' });
+            doc.text("ORE", startX + numGiorni * cellW + 6, topY + 7, { align: 'center' });
+
+            let currentY = topY + 9;
+            let totaliGiornalieriDip = new Array(numGiorni + 1).fill(0);
+
+            dipendentiSulCantiere.forEach(dep => {
+                doc.setFillColor(240, 243, 246);
+                doc.rect(14, currentY, 38, cellH, 'F');
+                doc.setFontSize(7.5);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(30, 41, 59);
+                let nomeTroncato = dep.length > 20 ? dep.substring(0, 18) + '...' : dep;
+                doc.text(nomeTroncato, 16, currentY + 4.2);
+
+                let totOreDep = 0;
+                for (let d = 1; d <= numGiorni; d++) {
+                    let dateObj = new Date(anno, mese - 1, d);
+                    let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
+                    let x = startX + (d - 1) * cellW;
+
+                    doc.setDrawColor(210, 215, 220);
+                    if (isFestivo) {
+                        doc.setFillColor(255, 242, 204);
+                        doc.rect(x, currentY, cellW, cellH, 'F');
+                    } else {
+                        doc.setFillColor(255, 255, 255);
+                        doc.rect(x, currentY, cellW, cellH, 'F');
+                    }
+                    doc.rect(x, currentY, cellW, cellH);
+
+                    let dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    let oreGiornoDep = 0;
+                    rapportini.forEach(rap => {
+                        let [pAnno, pMese] = rap.data.split('-').map(Number);
+                        if (rap.cantierePrincipale === cantiereScelto && rap.data === dataStr && pAnno === anno && pMese === mese) {
+                            rap.vociDipendenti.forEach(v => {
+                                if (v.dipendente === dep && v.voce === cantiereScelto) oreGiornoDep += v.ore;
+                            });
+                        }
+                    });
+
+                    if (oreGiornoDep > 0) {
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(30, 41, 59);
+                        doc.text(String(oreGiornoDep), x + cellW / 2, currentY + 4.2, { align: 'center' });
+                        totOreDep += oreGiornoDep;
+                        totaliGiornalieriDip[d] += oreGiornoDep;
+                    }
+                }
+
+                doc.setFillColor(230, 235, 240);
+                doc.rect(startX + numGiorni * cellW, currentY, 12, cellH, 'F');
+                doc.rect(startX + numGiorni * cellW, currentY, 12, cellH);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(30, 41, 59);
+                doc.text(totOreDep.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.2, { align: 'center' });
+
+                currentY += cellH;
+            });
+
+            doc.setFillColor(217, 217, 217);
+            doc.rect(14, currentY, 38, 7, 'F');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(6.5);
+            doc.setTextColor(30, 41, 59);
+            doc.text("TOTALE ORE GIORNALIERO", 16, currentY + 4.5);
+
+            let totaleComplessivoOre = 0;
+            for (let d = 1; d <= numGiorni; d++) {
+                let dateObj = new Date(anno, mese - 1, d);
+                let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
+                let x = startX + (d - 1) * cellW;
+
+                if (isFestivo) {
+                    doc.setFillColor(255, 242, 204);
+                    doc.rect(x, currentY, cellW, 7, 'F');
+                } else {
+                    doc.setFillColor(217, 217, 217);
+                    doc.rect(x, currentY, cellW, 7, 'F');
+                }
+                doc.rect(x, currentY, cellW, 7);
+
+                if (totaliGiornalieriDip[d] > 0) {
+                    doc.setFontSize(7.5);
+                    doc.text(String(totaliGiornalieriDip[d]), x + cellW / 2, currentY + 4.5, { align: 'center' });
+                    totaleComplessivoOre += totaliGiornalieriDip[d];
+                }
+            }
+
+            doc.setFillColor(200, 205, 210);
+            doc.rect(startX + numGiorni * cellW, currentY, 12, 7, 'F');
+            doc.rect(startX + numGiorni * cellW, currentY, 12, 7);
+            doc.setFontSize(7.5);
+            doc.text(totaleComplessivoOre.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.5, { align: 'center' });
+
+            currentY += 14;
+
+            let mezziSulCantiere = new Set();
+            rapportini.forEach(rap => {
+                let [pAnno, pMese] = rap.data.split('-').map(Number);
+                if (rap.cantierePrincipale === cantiereScelto && pAnno === anno && pMese === mese) {
+                    if (rap.mezziObj) rap.mezziObj.forEach(mo => mezziSulCantiere.add(mo.nome));
+                }
+            });
+
+            if (mezziSulCantiere.size > 0) {
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(192, 0, 0);
+                doc.text(`Automezzi Utilizzati sul Cantiere (Ore di Utilizzo)`, 14, currentY);
+
+                let topYMezzi = currentY + 4;
+                currentY += 13;
+
+                doc.setFillColor(51, 51, 51);
+                doc.rect(startX, topYMezzi, cellW * numGiorni + 12, 9, 'F');
+                doc.setFontSize(7.5);
+                doc.setTextColor(255, 255, 255);
+
+                for (let g = 1; g <= numGiorni; g++) {
+                    let dateObj = new Date(anno, mese - 1, g);
+                    let dow = dateObj.getDay();
+                    let isFestivo = (dow === 0 || dow === 6);
+                    let x = startX + (g - 1) * cellW;
+
+                    if (isFestivo) {
+                        doc.setFillColor(255, 192, 0);
+                        doc.rect(x, topYMezzi, cellW, 9, 'F');
+                        doc.setTextColor(192, 0, 0);
+                    } else {
+                        doc.setTextColor(255, 255, 255);
+                    }
+                    doc.text(giorniAbbr[dow], x + cellW / 2, topYMezzi + 3, { align: 'center' });
+                    doc.text(String(g).padStart(2, '0'), x + cellW / 2, topYMezzi + 7, { align: 'center' });
+                }
+
+                doc.setFillColor(51, 51, 51);
+                doc.rect(startX + numGiorni * cellW, topYMezzi, 12, 9, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.text("TOTALE", startX + numGiorni * cellW + 6, topYMezzi + 3, { align: 'center' });
+                doc.text("ORE", startX + numGiorni * cellW + 6, topYMezzi + 7, { align: 'center' });
+
+                mezziSulCantiere.forEach(mezzoName => {
+                    doc.setFillColor(254, 243, 199);
+                    doc.rect(14, currentY, 38, cellH, 'F');
+                    doc.setFontSize(7.5);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(30, 41, 59);
+                    let mezzoTroncato = mezzoName.length > 20 ? mezzoName.substring(0, 18) + '...' : mezzoName;
+                    doc.text(mezzoTroncato, 16, currentY + 4.2);
+
+                    let totOreMezzo = 0;
+                    for (let d = 1; d <= numGiorni; d++) {
+                        let dateObj = new Date(anno, mese - 1, d);
+                        let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
+                        let x = startX + (d - 1) * cellW;
+
+                        doc.setDrawColor(210, 215, 220);
+                        if (isFestivo) {
+                            doc.setFillColor(255, 242, 204);
+                            doc.rect(x, currentY, cellW, cellH, 'F');
+                        } else {
+                            doc.setFillColor(255, 251, 235);
+                            doc.rect(x, currentY, cellW, cellH, 'F');
+                        }
+                        doc.rect(x, currentY, cellW, cellH);
+
+                        let dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        let oreMezzoGiorno = 0;
+
+                        rapportini.forEach(rap => {
+                            let [pAnno, pMese] = rap.data.split('-').map(Number);
+                            if (rap.cantierePrincipale === cantiereScelto && rap.data === dataStr && pAnno === anno && pMese === mese) {
+                                if (rap.mezziObj) {
+                                    let found = rap.mezziObj.find(mo => mo.nome === mezzoName);
+                                    if (found) oreMezzoGiorno += found.ore;
+                                }
+                            }
+                        });
+
+                        if (oreMezzoGiorno > 0) {
+                            doc.setFont("helvetica", "bold");
+                            doc.setTextColor(180, 83, 9);
+                            doc.text(String(oreMezzoGiorno), x + cellW / 2, currentY + 4.2, { align: 'center' });
+                            totOreMezzo += oreMezzoGiorno;
+                        }
+                    }
+
+                    doc.setFillColor(253, 230, 138);
+                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH, 'F');
+                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(180, 83, 9);
+                    doc.text(totOreMezzo.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.2, { align: 'center' });
+
+                    currentY += cellH;
+                });
+            }
+
+            const nomeFile = `Report_Cantiere_${cantiereScelto.replace(/\s+/g, '_')}_${nomeMeseStr}_${anno}.pdf`;
+            doc.save(nomeFile);
+
+            inviaPDFAlCloud(`${meseInput}-01`, nomeFile, doc, "Report cantiere");
+        }
+
+        aggiornaInterfaccia();
+    </script>
+</body>
+</html>
