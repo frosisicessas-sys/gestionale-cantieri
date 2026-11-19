@@ -1999,7 +1999,7 @@ row.className = "flex flex-col sm:flex-row flex-wrap items-stretch sm:items-cent
             doc.setFontSize(10);
             doc.text(`Data Intervento:`, 14, 48);
             doc.setFont("helvetica", "normal");
-            doc.text(`${rap.data}`, 50, 48);
+            doc.text(`${formattaDataGGMMAAAA(rap.data)}`, 50, 48);
 
             doc.setFont("helvetica", "bold");
             doc.text(`Cantiere:`, 14, 55);
