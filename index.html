@@ -946,6 +946,66 @@
             });
         }
 
+function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra = false) {
+            let optionsCausali = '';
+            optionsCausali += '<optgroup label="Cantieri">';
+            cantieri.forEach(c => {
+                let sel = (c.nome === causaleVal) ? 'selected' : '';
+                optionsCausali += `<option value="${c.nome}" ${sel}>${c.nome}</option>`;
+            });
+            optionsCausali += '</optgroup>';
+            optionsCausali += '<optgroup label="Causali / Assenze">';
+            causali.forEach(c => {
+                let sel = (c.nome === causaleVal) ? 'selected' : '';
+                optionsCausali += `<option value="${c.nome}" ${sel}>${c.nome}</option>`;
+            });
+            optionsCausali += '</optgroup>';
+
+            let row = document.createElement('div');
+            row.className = "flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 row-dipendente-ore w-full overflow-hidden";
+            row.dataset.dipendente = dep;
+
+            let disabledClass = spuntato ? '' : 'opacity-40 pointer-events-none';
+            let pulsanteExtra = isExtra
+                ? `<button type="button" onclick="rimuoviRigaDipendenteExtra(this)" class="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold px-2.5 py-1 rounded-lg" title="Rimuovi riga aggiuntiva">✕ Riga</button>`
+                : `<button type="button" onclick="aggiungiRigaDipendente(this)" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold px-2.5 py-1 rounded-lg" title="Aggiungi altra ora/causale per questo dipendente">+ Riga</button>`;
+
+            row.innerHTML = `
+              <div class="flex items-center gap-2.5 w-full">
+                <input type="checkbox" ${spuntato ? 'checked' : ''} onchange="toggleRigaDipendente(this)" class="chk-attivo-dep w-5 h-5 text-blue-600 rounded cursor-pointer shrink-0">
+                <span class="font-bold text-slate-800 text-base flex-1 text-left">${dep}${isExtra ? ' <span class="text-xs font-semibold text-blue-600">(altra voce)</span>' : ''}</span>
+                ${pulsanteExtra}
+              </div>
+              <div class="wrapper-campi-dep flex flex-wrap items-center gap-3 w-full ${disabledClass}">
+                <div class="flex items-center gap-2 shrink-0">
+                  <label class="text-[11px] font-bold text-slate-500 uppercase">Ore:</label>
+                  <input type="number" step="0.5" min="0" max="24" value="${oreVal}" class="input-ore-dep w-24 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white text-center font-bold text-blue-900">
+                </div>
+                <div class="flex items-center gap-2 flex-1 min-w-[160px]">
+                  <label class="text-[11px] font-bold text-slate-500 uppercase hidden sm:inline">Causale:</label>
+                  <select class="select-causale-dep w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    ${optionsCausali}
+                  </select>
+                </div>
+              </div>
+            `;
+            return row;
+        }
+
+        function aggiungiRigaDipendente(btn) {
+            const rigaCorrente = btn.closest('.row-dipendente-ore');
+            const dep = rigaCorrente.dataset.dipendente;
+            const cantierePrincipaleCorrente = document.getElementById('selectCantiereGlobale').value;
+
+            const nuovaRiga = creaElementoRigaDipendente(dep, true, 0, cantierePrincipaleCorrente, true);
+            rigaCorrente.insertAdjacentElement('afterend', nuovaRiga);
+        }
+
+        function rimuoviRigaDipendenteExtra(btn) {
+            const rigaCorrente = btn.closest('.row-dipendente-ore');
+            if (rigaCorrente) rigaCorrente.remove();
+        }
+
         function renderizzaListaDipendentiOre(datiSalvati = null) {
             const container = document.getElementById('containerListaDipendentiOre');
             container.innerHTML = '';
@@ -953,60 +1013,21 @@
             const cantierePrincipaleCorrente = document.getElementById('selectCantiereGlobale').value;
 
             dipendenti.forEach(dep => {
-                let spuntato = false;
-                let oreVal = 8;
-                let causaleVal = cantierePrincipaleCorrente;
-
                 if (datiSalvati) {
-                    let voceTrovata = datiSalvati.find(v => v.dipendente === dep);
-                    if (voceTrovata) {
-                        spuntato = true;
-                        oreVal = voceTrovata.ore;
-                        causaleVal = voceTrovata.voce;
+                    let vociDelDip = datiSalvati.filter(v => v.dipendente === dep);
+                    if (vociDelDip.length > 0) {
+                        vociDelDip.forEach((voceObj, idx) => {
+                            const row = creaElementoRigaDipendente(dep, true, voceObj.ore, voceObj.voce, idx > 0);
+                            container.appendChild(row);
+                        });
+                    } else {
+                        const row = creaElementoRigaDipendente(dep, false, 8, cantierePrincipaleCorrente, false);
+                        container.appendChild(row);
                     }
                 } else {
-                    spuntato = true;
+                    const row = creaElementoRigaDipendente(dep, true, 8, cantierePrincipaleCorrente, false);
+                    container.appendChild(row);
                 }
-
-                let optionsCausali = '';
-                optionsCausali += '<optgroup label="Cantieri">';
-                cantieri.forEach(c => {
-                    let sel = (c.nome === causaleVal) ? 'selected' : '';
-                    optionsCausali += `<option value="${c.nome}" ${sel}>${c.nome}</option>`;
-                });
-                optionsCausali += '</optgroup>';
-                optionsCausali += '<optgroup label="Causali / Assenze">';
-                causali.forEach(c => {
-                    let sel = (c.nome === causaleVal) ? 'selected' : '';
-                    optionsCausali += `<option value="${c.nome}" ${sel}>${c.nome}</option>`;
-                });
-                optionsCausali += '</optgroup>';
-
-               let row = document.createElement('div');
-row.className = "flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 row-dipendente-ore w-full overflow-hidden";
-                row.dataset.dipendente = dep;
-
-                let disabledClass = spuntato ? '' : 'opacity-40 pointer-events-none';
-
-               row.innerHTML = `
-  <div class="flex items-center gap-3 w-full">
-    <input type="checkbox" ${spuntato ? 'checked' : ''} onchange="toggleRigaDipendente(this)" class="chk-attivo-dep w-5 h-5 text-blue-600 rounded cursor-pointer shrink-0">
-    <span class="font-bold text-slate-800 text-base flex-1 text-left">${dep}</span>
-  </div>
-  <div class="flex flex-wrap items-center gap-3 w-full ${disabledClass}">
-    <div class="flex items-center gap-2 shrink-0">
-      <label class="text-[11px] font-bold text-slate-500 uppercase">Ore:</label>
-      <input type="number" step="0.5" min="0" max="24" value="${oreVal}" class="input-ore-dep w-24 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white text-center font-bold text-blue-900">
-    </div>
-    <div class="flex items-center gap-2 flex-1 min-w-[160px]">
-      <label class="text-[11px] font-bold text-slate-500 uppercase hidden sm:inline">Causale:</label>
-      <select class="select-causale-dep w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none">
-        ${optionsCausali}
-      </select>
-    </div>
-  </div>
-`;
-                container.appendChild(row);
             });
         }
 
