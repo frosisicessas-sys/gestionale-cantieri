@@ -1968,7 +1968,14 @@ row.className = "flex flex-col sm:flex-row flex-wrap items-stretch sm:items-cent
             let rap = rapportini[index];
             generaPDFOggetto(rap, true);
         }
-
+function formattaDataGGMMAAAA(dataStr) {
+  if (!dataStr) return '';
+  const parti = dataStr.toString().split('-');
+  if (parti.length === 3) {
+    return `${parti[2]}-${parti[1]}-${parti[0]}`;
+  }
+  return dataStr;
+}
         function generaPDFOggetto(rap, scaricaAncheSulTelefono = true) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
