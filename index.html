@@ -119,7 +119,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                     <div>
                         <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Data Intervento</label>
-                        <input type="date" id="inputData" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                        <input type="date" id="inputData" onchange="aggiornaControlloOreGiornaliere()" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Cantiere o Causale Principale</label>
@@ -139,7 +139,8 @@
                             <button type="button" onclick="selezionaTuttiDipendenti(false)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg">Deseleziona</button>
                         </div>
                     </div>
-                    <div id="containerListaDipendentiOre" class="space-y-2.5 max-h-96 overflow-y-auto pr-1"></div>
+                    <div id="riepilogoOreGiornaliereDipendenti" class="mb-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs"></div>
+                    <div id="containerListaDipendentiOre" oninput="aggiornaControlloOreGiornaliere()" onchange="aggiornaControlloOreGiornaliere()" class="space-y-2.5 max-h-96 overflow-y-auto pr-1"></div>
                 </div>
 
                 <!-- Automezzi con Ore di Utilizzo -->
@@ -873,6 +874,7 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
             });
 
             aggiornaTabellaMateriali();
+            aggiornaControlloOreGiornaliere();
 
             const tbody = document.getElementById('tabellaStoricoBody');
             const cardsMob = document.getElementById('cardsStoricoMobile');
@@ -1000,11 +1002,13 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
 
             const nuovaRiga = creaElementoRigaDipendente(dep, true, 0, cantierePrincipaleCorrente, true);
             rigaCorrente.insertAdjacentElement('afterend', nuovaRiga);
+            aggiornaControlloOreGiornaliere();
         }
 
         function rimuoviRigaDipendenteExtra(btn) {
             const rigaCorrente = btn.closest('.row-dipendente-ore');
             if (rigaCorrente) rigaCorrente.remove();
+            aggiornaControlloOreGiornaliere();
         }
 
         function renderizzaListaDipendentiOre(datiSalvati = null) {
@@ -1030,6 +1034,8 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                     container.appendChild(row);
                 }
             });
+
+            aggiornaControlloOreGiornaliere();
         }
 
         function toggleRigaDipendente(checkbox) {
@@ -1041,6 +1047,86 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             } else {
                 wrapper.classList.add('opacity-40', 'pointer-events-none');
             }
+            aggiornaControlloOreGiornaliere();
+        }
+
+        function aggiornaControlloOreGiornaliere() {
+            const box = document.getElementById('riepilogoOreGiornaliereDipendenti');
+            if (!box) return;
+
+            const dataSelezionata = document.getElementById('inputData').value;
+            const editSessionId = document.getElementById('editSessionId').value;
+
+            if (!dataSelezionata) {
+                box.innerHTML = `<span class="text-slate-500">Seleziona una data per vedere il totale ore giornaliero per dipendente.</span>`;
+                return;
+            }
+
+            const riepilogo = {};
+            dipendenti.forEach(d => {
+                riepilogo[d] = { oreGiaSalvate: 0, oreNelForm: 0 };
+            });
+
+            rapportini.forEach(rap => {
+                if (rap.data === dataSelezionata && (!editSessionId || rap.id !== editSessionId)) {
+                    if (Array.isArray(rap.vociDipendenti)) {
+                        rap.vociDipendenti.forEach(v => {
+                            if (!riepilogo[v.dipendente]) {
+                                riepilogo[v.dipendente] = { oreGiaSalvate: 0, oreNelForm: 0 };
+                            }
+                            riepilogo[v.dipendente].oreGiaSalvate += parseFloat(v.ore) || 0;
+                        });
+                    }
+                }
+            });
+
+            document.querySelectorAll('.row-dipendente-ore').forEach(row => {
+                const chk = row.querySelector('.chk-attivo-dep');
+                if (chk && chk.checked) {
+                    const dep = row.dataset.dipendente;
+                    const oreInput = parseFloat(row.querySelector('.input-ore-dep').value) || 0;
+                    if (!riepilogo[dep]) {
+                        riepilogo[dep] = { oreGiaSalvate: 0, oreNelForm: 0 };
+                    }
+                    riepilogo[dep].oreNelForm += oreInput;
+                }
+            });
+
+            const vociConOre = Object.entries(riepilogo)
+                .map(([dep, val]) => ({
+                    dep,
+                    salvate: val.oreGiaSalvate,
+                    form: val.oreNelForm,
+                    totale: val.oreGiaSalvate + val.oreNelForm
+                }))
+                .filter(item => item.totale > 0 || item.form > 0);
+
+            if (vociConOre.length === 0) {
+                box.innerHTML = `<span class="text-slate-500">Nessuna ora segnata per il <b>${formattaDataGGMMAAAA(dataSelezionata)}</b>.</span>`;
+                return;
+            }
+
+            const badgeHtml = vociConOre.map(item => {
+                const oltreOtto = item.totale > 8;
+                const stile = oltreOtto
+                    ? "bg-red-100 text-red-900 border-red-300 font-extrabold"
+                    : (item.totale === 8
+                        ? "bg-emerald-50 text-emerald-900 border-emerald-200 font-semibold"
+                        : "bg-white text-slate-800 border-slate-200 font-semibold");
+
+                const dettaglio = item.salvate > 0
+                    ? ` <span class="text-[10px] opacity-80">(${item.salvate}h già a sistema + ${item.form}h qui)</span>`
+                    : "";
+
+                return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border ${stile} mr-1.5 mb-1">${oltreOtto ? '⚠️' : '🕒'} ${item.dep}: <span>${item.totale}h</span>${dettaglio}</span>`;
+            }).join('');
+
+            box.innerHTML = `
+                <div class="font-bold text-slate-700 uppercase text-[11px] mb-1.5">
+                    📊 Totale Giornaliero per Dipendente (${formattaDataGGMMAAAA(dataSelezionata)}) — Soglia riferimento: 8h
+                </div>
+                <div class="flex flex-wrap">${badgeHtml}</div>
+            `;
         }
 
         function selezionaTuttiDipendenti(stato) {
