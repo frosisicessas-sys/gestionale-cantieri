@@ -1167,7 +1167,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                 }
             });
 
-            const vociConOre = Object.entries(riepilogo)
+            const vociTuttiDipendenti = Object.entries(riepilogo)
                 .map(([dep, val]) => {
                     const info = getDipendenteInfo(dep);
                     return {
@@ -1178,20 +1178,29 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                         oreTarget: info.oreTarget,
                         illimitate: info.illimitate
                     };
-                })
-                .filter(item => item.totale > 0 || item.form > 0);
+                });
 
-            if (vociConOre.length === 0) {
-                box.innerHTML = `<span class="text-slate-500">Nessuna ora segnata per il <b>${formattaDataGGMMAAAA(dataSelezionata)}</b>.</span>`;
+            if (vociTuttiDipendenti.length === 0) {
+                box.innerHTML = `<span class="text-slate-500">Nessun dipendente in anagrafica.</span>`;
                 return;
             }
 
-            const badgeHtml = vociConOre.map(item => {
+            const badgeHtml = vociTuttiDipendenti.map(item => {
                 let stile = "bg-white text-slate-800 border-slate-200 font-semibold";
                 let icona = "🕒";
                 let suffissoTarget = "";
 
-                if (item.illimitate) {
+                if (item.totale === 0) {
+                    stile = "bg-slate-100 text-slate-500 border-slate-300 font-semibold";
+                    icona = "⚪";
+                    if (item.illimitate) {
+                        suffissoTarget = " <span class='text-[10px] opacity-75'>(illimitate)</span>";
+                    } else if (item.oreTarget !== null && item.oreTarget !== undefined) {
+                        suffissoTarget = ` <span class='text-[10px] opacity-75'>/ ${item.oreTarget}h</span>`;
+                    } else {
+                        suffissoTarget = " <span class='text-[10px] opacity-75'>(senza soglia)</span>";
+                    }
+                } else if (item.illimitate) {
                     stile = "bg-purple-50 text-purple-900 border-purple-200 font-semibold";
                     icona = "∞";
                     suffissoTarget = " <span class='text-[10px] opacity-75'>(illimitate)</span>";
@@ -1222,7 +1231,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
 
             box.innerHTML = `
                 <div class="font-bold text-slate-700 uppercase text-[11px] mb-1.5">
-                    📊 Totale Giornaliero per Dipendente / Subappalto (${formattaDataGGMMAAAA(dataSelezionata)})
+                    📊 Totale Giornaliero per Dipendente / Subappalto (${formattaDataGGMMAAAA(dataSelezionata)}) — Tutti i dipendenti in anagrafica
                 </div>
                 <div class="flex flex-wrap">${badgeHtml}</div>
             `;
