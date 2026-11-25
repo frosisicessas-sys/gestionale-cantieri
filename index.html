@@ -118,12 +118,16 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                     <div>
-                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Data Intervento</label>
-                        <input type="date" id="inputData" onchange="aggiornaControlloOreGiornaliere()" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-xs font-bold text-slate-600 uppercase">Data Intervento</label>
+                            <button type="button" onclick="impostaDataOggi()" class="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-100/80 hover:bg-blue-200 px-2 py-0.5 rounded-md transition">📅 Metti Oggi</button>
+                        </div>
+                        <input type="date" id="inputData" onchange="aggiornaControlloOreGiornaliere(); verificaAvvisoData();" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                        <div id="avvisoDataRapportino" class="hidden mt-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border"></div>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Cantiere o Causale Principale</label>
-                        <select id="selectCantiereGlobale" onchange="aggiornaCantierePrincipaleUI(); caricaUltimoRapportinoPerCantiere(this.value);" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                        <select id="selectCantiereGlobale" onchange="aggiornaCantierePrincipaleUI(); caricaUltimoRapportinoPerCantiere(this.value); verificaAvvisoData();" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
                             <option value="">-- Seleziona Cantiere o Causale --</option>
                         </select>
                         <p class="text-[11px] text-blue-700/80 mt-1">Selezionando un cantiere carica automaticamente l'ultima squadra usata.</p>
@@ -875,6 +879,7 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
 
             aggiornaTabellaMateriali();
             aggiornaControlloOreGiornaliere();
+            verificaAvvisoData();
 
             const tbody = document.getElementById('tabellaStoricoBody');
             const cardsMob = document.getElementById('cardsStoricoMobile');
@@ -918,6 +923,7 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
                         <td class="p-3.5 text-center space-x-1 whitespace-nowrap">
                             <button type="button" onclick="generaPDFRapportinoSingolo(${realIndex})" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm" title="Stampa PDF e Salva su Drive">📄 PDF</button>
                             <button type="button" onclick="copiaRapportino(${realIndex})" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm" title="Copia e riutilizza">📋 Copia</button>
+                            ${rap.backupPrecedente ? `<button type="button" onclick="ripristinaVersionePrecedente(${realIndex})" class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm" title="Ripristina i dati precedenti alla sovrascrittura">↩️ Ripristina</button>` : ''}
                             <button type="button" onclick="modificaRapportino(${realIndex})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm">Modifica</button>
                             <button type="button" onclick="eliminaRapportino(${realIndex})" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs px-2 py-1 rounded-lg font-semibold transition shadow-sm">Elimina</button>
                         </td>
@@ -939,6 +945,10 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
                         <div class="pt-1">${dipListStr}</div>
                         ${mezziStr}
                         ${noteStr}
+                        ${rap.backupPrecedente ? `
+                        <div class="pt-1">
+                            <button type="button" onclick="ripristinaVersionePrecedente(${realIndex})" class="w-full bg-purple-50 text-purple-800 border border-purple-200 text-xs py-2 rounded-lg font-bold text-center">↩️ Ripristina versione precedente alla sovrascrittura</button>
+                        </div>` : ''}
                         <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
                             <button type="button" onclick="copiaRapportino(${realIndex})" class="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs py-2 rounded-lg font-bold text-center">📋 Copia</button>
                             <button type="button" onclick="modificaRapportino(${realIndex})" class="bg-blue-50 text-blue-800 border border-blue-200 text-xs py-2 rounded-lg font-bold text-center">✏️ Modifica</button>
@@ -1940,6 +1950,53 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
+        function getDataOggiISO() {
+            const d = new Date();
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        function impostaDataOggi() {
+            document.getElementById('inputData').value = getDataOggiISO();
+            aggiornaControlloOreGiornaliere();
+            verificaAvvisoData();
+        }
+
+        function verificaAvvisoData() {
+            const box = document.getElementById('avvisoDataRapportino');
+            if (!box) return;
+            const dataSel = document.getElementById('inputData').value;
+            const cantiereSel = document.getElementById('selectCantiereGlobale').value;
+            const editSessionId = document.getElementById('editSessionId').value;
+            const oggiISO = getDataOggiISO();
+
+            if (!dataSel) {
+                box.classList.add('hidden');
+                return;
+            }
+
+            const duplicatoEsistente = rapportini.find(r =>
+                r.data === dataSel &&
+                cantiereSel &&
+                r.cantierePrincipale === cantiereSel &&
+                (!editSessionId || r.id !== editSessionId)
+            );
+
+            if (duplicatoEsistente) {
+                box.className = "mt-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border bg-red-100 text-red-900 border-red-300";
+                box.innerHTML = `⚠️ Esiste già un rapportino per <b>${cantiereSel}</b> in data <b>${formattaDataGGMMAAAA(dataSel)}</b>!`;
+                box.classList.remove('hidden');
+            } else if (dataSel !== oggiISO && !editSessionId) {
+                box.className = "mt-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border bg-amber-100 text-amber-900 border-amber-300";
+                box.innerHTML = `📅 Attenzione: stai inserendo un rapportino con data <b>${formattaDataGGMMAAAA(dataSel)}</b> (diversa da oggi).`;
+                box.classList.remove('hidden');
+            } else {
+                box.classList.add('hidden');
+            }
+        }
+
         function registraPresenzeIndividuali() {
             let data = document.getElementById('inputData').value;
             let cantierePrincipale = document.getElementById('selectCantiereGlobale').value;
@@ -1950,6 +2007,42 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             if (!data || !cantierePrincipale) {
                 alert("Seleziona la data e il Cantiere / Causale principale in alto!");
                 return;
+            }
+
+            // Controllo data diversa da oggi in fase di nuovo inserimento
+            const oggiISO = getDataOggiISO();
+            if (!editSessionId && data !== oggiISO) {
+                const confermaData = confirm(
+                    `⚠️ CONTROLLO DATA\n\n` +
+                    `La data selezionata è ${formattaDataGGMMAAAA(data)} (NON è oggi ${formattaDataGGMMAAAA(oggiISO)}).\n\n` +
+                    `Vuoi confermare il salvataggio per il ${formattaDataGGMMAAAA(data)}?`
+                );
+                if (!confermaData) return;
+            }
+
+            // Controllo se esiste già un rapportino con la stessa data e lo stesso cantiere
+            const idxDuplicato = rapportini.findIndex(r =>
+                r.data === data &&
+                r.cantierePrincipale === cantierePrincipale &&
+                (!editSessionId || r.id !== editSessionId)
+            );
+
+            let sovrascriviIdEsistente = null;
+            if (idxDuplicato > -1) {
+                const vecchioRap = rapportini[idxDuplicato];
+                const riepilogoVecchio = vecchioRap.vociDipendenti
+                    .map(v => `${v.dipendente} (${v.ore}h)`)
+                    .join(', ');
+
+                const sceltaSovrascrivi = confirm(
+                    `🚨 RAPPORTINO GIÀ ESISTENTE!\n\n` +
+                    `Esiste già un rapportino per "${cantierePrincipale}" in data ${formattaDataGGMMAAAA(data)}:\n` +
+                    `• Squadra attuale: ${riepilogoVecchio}\n\n` +
+                    `Premi OK per AGGIORNARE/SOVRASCRIVERE quello esistente (verrà salvata una copia di sicurezza).\n` +
+                    `Premi ANNULLA se vuoi tornare indietro e cambiare la data.`
+                );
+                if (!sceltaSovrascrivi) return;
+                sovrascriviIdEsistente = vecchioRap.id;
             }
 
             let righeDip = document.querySelectorAll('.row-dipendente-ore');
@@ -1985,19 +2078,24 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                 mezziObjScelti.push({ nome: mName, ore: mOre });
             });
 
+            const idTarget = editSessionId || sovrascriviIdEsistente || ('rap_' + Date.now());
+            const idxEsistente = rapportini.findIndex(r => r.id === idTarget);
+            let backupPrecedente = idxEsistente > -1 ? JSON.parse(JSON.stringify(rapportini[idxEsistente])) : null;
+            if (backupPrecedente) delete backupPrecedente.backupPrecedente;
+
             let nuovoRapportino = {
-                id: editSessionId ? editSessionId : 'rap_' + Date.now(),
+                id: idTarget,
                 data,
                 cantierePrincipale,
                 vociDipendenti,
                 mezziObj: mezziObjScelti,
                 note,
-                rilievi
+                rilievi,
+                backupPrecedente: backupPrecedente || (idxEsistente > -1 ? rapportini[idxEsistente].backupPrecedente : null)
             };
 
-            if (editSessionId) {
-                let idx = rapportini.findIndex(r => r.id === editSessionId);
-                if (idx > -1) rapportini[idx] = nuovoRapportino;
+            if (idxEsistente > -1) {
+                rapportini[idxEsistente] = nuovoRapportino;
             } else {
                 rapportini.push(nuovoRapportino);
             }
@@ -2045,6 +2143,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
 
         function resetForm() {
             document.getElementById('editSessionId').value = '';
+            document.getElementById('inputData').value = getDataOggiISO();
             document.getElementById('formTitle').textContent = "📝 Rapportino Giornaliero";
             document.getElementById('editBadge').classList.add('hidden');
             document.getElementById('btnSalva').textContent = "💾 Registra & Salva PDF su Drive";
@@ -2056,6 +2155,20 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             renderizzaListaDipendentiOre();
             document.querySelectorAll('.chk-ins-mezzo').forEach(cb => cb.checked = false);
             document.querySelectorAll('.input-mezzo-ore').forEach(inp => inp.classList.add('hidden'));
+            verificaAvvisoData();
+        }
+
+        function ripristinaVersionePrecedente(index) {
+            const rap = rapportini[index];
+            if (!rap || !rap.backupPrecedente) return;
+
+            const prev = rap.backupPrecedente;
+            const riepilogoPrev = prev.vociDipendenti.map(v => `${v.dipendente} (${v.ore}h)`).join(', ');
+            if (confirm(`Vuoi ripristinare la versione precedente di questo rapportino (${formattaDataGGMMAAAA(prev.data)} - ${prev.cantierePrincipale})?\n\nDati che verranno ripristinati:\n${riepilogoPrev}`)) {
+                rapportini[index] = JSON.parse(JSON.stringify(prev));
+                salvaStorage();
+                alert("Versione precedente ripristinata!");
+            }
         }
 
         function eliminaRapportino(index) {
