@@ -67,10 +67,20 @@
 
                 <!-- Dipendenti -->
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">👤 Dipendenti</label>
-                    <div class="flex gap-2 mb-3">
-                        <input type="text" id="nuovoDipendente" placeholder="Nome Cognome" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        <button type="button" onclick="aggiungiDipendente()" class="bg-blue-600 text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 active:scale-95 transition">Add</button>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">👤 Dipendenti & Subappalti</label>
+                    <div class="space-y-2 mb-3">
+                        <input type="text" id="nuovoDipendente" placeholder="Nome Cognome o Impresa" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <div class="flex gap-2">
+                            <select id="nuovoDipendenteOreMode" onchange="toggleInputOreNuovoDip()" class="flex-1 border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="8">Standard 8h</option>
+                                <option value="6">Part-time 6h</option>
+                                <option value="custom">Ore personalizzate...</option>
+                                <option value="unlimited">Ore illimitate (∞)</option>
+                                <option value="none">Nessuna soglia</option>
+                            </select>
+                            <input type="number" id="nuovoDipendenteOreCustom" step="0.5" min="0.5" max="200" placeholder="Ore" class="hidden w-20 border border-slate-300 rounded-lg px-2 py-2 text-xs font-bold text-center bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <button type="button" onclick="aggiungiDipendente()" class="bg-blue-600 text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 active:scale-95 transition">Add</button>
+                        </div>
                     </div>
                     <div id="listaAnagraficaDipendenti" class="border border-slate-100 bg-slate-50 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1.5 text-xs flex-1"></div>
                 </div>
@@ -627,7 +637,39 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
             }
         }
 
-        let dipendenti = JSON.parse(localStorage.getItem('gestionale_dipendenti')) || ["Lanzi Rodolfo", "Mario Rossi", "Luigi Bianchi"];
+        let rawDipendenti = JSON.parse(localStorage.getItem('gestionale_dipendenti')) || [
+            { nome: "Lanzi Rodolfo", oreTarget: 8, illimitate: false },
+            { nome: "Mario Rossi", oreTarget: 8, illimitate: false },
+            { nome: "Luigi Bianchi", oreTarget: 8, illimitate: false }
+        ];
+
+        function normalizzaDipendente(item) {
+            if (typeof item === 'string') {
+                return { nome: item, oreTarget: 8, illimitate: false };
+            }
+            return {
+                nome: item.nome || '',
+                oreTarget: (item.oreTarget === undefined || item.oreTarget === null || item.oreTarget === '') ? null : parseFloat(item.oreTarget),
+                illimitate: Boolean(item.illimitate)
+            };
+        }
+
+        let dipendenti = rawDipendenti.map(normalizzaDipendente).filter(d => d.nome);
+
+        function getNomiDipendenti() {
+            return dipendenti.map(d => d.nome);
+        }
+
+        function getDipendenteInfo(nome) {
+            return dipendenti.find(d => d.nome === nome) || { nome, oreTarget: 8, illimitate: false };
+        }
+
+        function formatTargetDipendente(info) {
+            if (!info) return "8h";
+            if (info.illimitate) return "∞ Illimitate";
+            if (info.oreTarget === null || info.oreTarget === undefined || isNaN(info.oreTarget)) return "Nessuna soglia";
+            return `${info.oreTarget}h`;
+        }
         
         let cantieri = JSON.parse(localStorage.getItem('gestionale_cantieri')) || [
             {nome: "Cantiere 1", colore: "#E2EFDA"}, {nome: "Cantiere 2", colore: "#D9E1F2"}, 
@@ -753,7 +795,7 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
                 let data = await response.json();
 
                 if (data && data.dipendenti) {
-                    dipendenti = data.dipendenti;
+                    dipendenti = data.dipendenti.map(normalizzaDipendente).filter(d => d.nome);
                     cantieri = data.cantieri || cantieri;
                     causali = data.causali || causali;
                     automezzi = data.automezzi || automezzi;
@@ -787,7 +829,22 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
             const divAnaDep = document.getElementById('listaAnagraficaDipendenti');
             divAnaDep.innerHTML = '';
             dipendenti.forEach((d, idx) => {
-                divAnaDep.innerHTML += `<div class="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm"><span class="font-medium text-slate-700">${d}</span> <button type="button" onclick="eliminaElemento('dipendenti', ${idx})" class="text-red-600 hover:text-red-800 font-bold px-2 py-1 rounded text-xs bg-red-50">✕</button></div>`;
+                const badgeTesto = formatTargetDipendente(d);
+                const badgeClass = d.illimitate
+                    ? "bg-purple-100 text-purple-800 border-purple-200"
+                    : (d.oreTarget !== null ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-slate-100 text-slate-700 border-slate-200");
+                divAnaDep.innerHTML += `
+                    <div class="flex justify-between items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-semibold text-slate-800 block truncate">${d.nome}</span>
+                            <span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClass} mt-0.5">${badgeTesto}</span>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button type="button" onclick="modificaOreDipendente(${idx})" class="text-blue-700 hover:text-blue-900 font-bold px-2 py-1 rounded text-[11px] bg-blue-50 border border-blue-200" title="Imposta ore predefinite o illimitate">Ore</button>
+                            <button type="button" onclick="eliminaElemento('dipendenti', ${idx})" class="text-red-600 hover:text-red-800 font-bold px-2 py-1 rounded text-xs bg-red-50">✕</button>
+                        </div>
+                    </div>
+                `;
             });
 
             const divAnaCant = document.getElementById('listaAnagraficaCantieri');
@@ -873,7 +930,7 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
 
             const divChkExp = document.getElementById('listaCheckboxExport');
             divChkExp.innerHTML = '';
-            dipendenti.forEach(d => {
+            getNomiDipendenti().forEach(d => {
                 divChkExp.innerHTML += `<label class="flex items-center gap-2.5 cursor-pointer text-xs py-0.5"><input type="checkbox" value="${d}" checked class="chk-exp-dep rounded text-emerald-600 w-4 h-4"> <span class="font-medium text-slate-700">${d}</span></label>`;
             });
 
@@ -1027,7 +1084,10 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
 
             const cantierePrincipaleCorrente = document.getElementById('selectCantiereGlobale').value;
 
-            dipendenti.forEach(dep => {
+            dipendenti.forEach(infoDep => {
+                const dep = infoDep.nome;
+                const oreDefaultDip = (infoDep.oreTarget !== null && infoDep.oreTarget !== undefined) ? infoDep.oreTarget : 8;
+
                 if (datiSalvati) {
                     let vociDelDip = datiSalvati.filter(v => v.dipendente === dep);
                     if (vociDelDip.length > 0) {
@@ -1036,11 +1096,12 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                             container.appendChild(row);
                         });
                     } else {
-                        const row = creaElementoRigaDipendente(dep, false, 8, cantierePrincipaleCorrente, false);
+                        const row = creaElementoRigaDipendente(dep, false, oreDefaultDip, cantierePrincipaleCorrente, false);
                         container.appendChild(row);
                     }
                 } else {
-                    const row = creaElementoRigaDipendente(dep, true, 8, cantierePrincipaleCorrente, false);
+                    // Di default nessun dipendente selezionato: spunta manuale uno ad uno
+                    const row = creaElementoRigaDipendente(dep, false, oreDefaultDip, cantierePrincipaleCorrente, false);
                     container.appendChild(row);
                 }
             });
@@ -1053,7 +1114,11 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             const inputOre = wrapper.querySelector('.input-ore-dep');
             if (checkbox.checked) {
                 wrapper.classList.remove('opacity-40', 'pointer-events-none');
-                if (parseFloat(inputOre.value) === 0) inputOre.value = 8;
+                if (parseFloat(inputOre.value) === 0) {
+                    const depNome = checkbox.closest('.row-dipendente-ore').dataset.dipendente;
+                    const info = getDipendenteInfo(depNome);
+                    inputOre.value = (info.oreTarget !== null && info.oreTarget !== undefined) ? info.oreTarget : 8;
+                }
             } else {
                 wrapper.classList.add('opacity-40', 'pointer-events-none');
             }
@@ -1074,7 +1139,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
 
             const riepilogo = {};
             dipendenti.forEach(d => {
-                riepilogo[d] = { oreGiaSalvate: 0, oreNelForm: 0 };
+                riepilogo[d.nome] = { oreGiaSalvate: 0, oreNelForm: 0 };
             });
 
             rapportini.forEach(rap => {
@@ -1103,12 +1168,17 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             });
 
             const vociConOre = Object.entries(riepilogo)
-                .map(([dep, val]) => ({
-                    dep,
-                    salvate: val.oreGiaSalvate,
-                    form: val.oreNelForm,
-                    totale: val.oreGiaSalvate + val.oreNelForm
-                }))
+                .map(([dep, val]) => {
+                    const info = getDipendenteInfo(dep);
+                    return {
+                        dep,
+                        salvate: val.oreGiaSalvate,
+                        form: val.oreNelForm,
+                        totale: val.oreGiaSalvate + val.oreNelForm,
+                        oreTarget: info.oreTarget,
+                        illimitate: info.illimitate
+                    };
+                })
                 .filter(item => item.totale > 0 || item.form > 0);
 
             if (vociConOre.length === 0) {
@@ -1117,23 +1187,42 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             }
 
             const badgeHtml = vociConOre.map(item => {
-                const oltreOtto = item.totale > 8;
-                const stile = oltreOtto
-                    ? "bg-red-100 text-red-900 border-red-300 font-extrabold"
-                    : (item.totale === 8
-                        ? "bg-emerald-50 text-emerald-900 border-emerald-200 font-semibold"
-                        : "bg-white text-slate-800 border-slate-200 font-semibold");
+                let stile = "bg-white text-slate-800 border-slate-200 font-semibold";
+                let icona = "🕒";
+                let suffissoTarget = "";
+
+                if (item.illimitate) {
+                    stile = "bg-purple-50 text-purple-900 border-purple-200 font-semibold";
+                    icona = "∞";
+                    suffissoTarget = " <span class='text-[10px] opacity-75'>(illimitate)</span>";
+                } else if (item.oreTarget === null || item.oreTarget === undefined) {
+                    stile = "bg-slate-100 text-slate-800 border-slate-300 font-semibold";
+                    icona = "🕒";
+                    suffissoTarget = " <span class='text-[10px] opacity-75'>(senza soglia)</span>";
+                } else {
+                    suffissoTarget = ` <span class='text-[10px] opacity-75'>/ ${item.oreTarget}h</span>`;
+                    if (item.totale > item.oreTarget) {
+                        stile = "bg-red-100 text-red-900 border-red-300 font-extrabold";
+                        icona = "⚠️";
+                    } else if (item.totale === item.oreTarget) {
+                        stile = "bg-emerald-50 text-emerald-900 border-emerald-200 font-bold";
+                        icona = "✅";
+                    } else {
+                        stile = "bg-amber-50 text-amber-900 border-amber-200 font-semibold";
+                        icona = "🕒";
+                    }
+                }
 
                 const dettaglio = item.salvate > 0
                     ? ` <span class="text-[10px] opacity-80">(${item.salvate}h già a sistema + ${item.form}h qui)</span>`
                     : "";
 
-                return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border ${stile} mr-1.5 mb-1">${oltreOtto ? '⚠️' : '🕒'} ${item.dep}: <span>${item.totale}h</span>${dettaglio}</span>`;
+                return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border ${stile} mr-1.5 mb-1">${icona} ${item.dep}: <span>${item.totale}h</span>${suffissoTarget}${dettaglio}</span>`;
             }).join('');
 
             box.innerHTML = `
                 <div class="font-bold text-slate-700 uppercase text-[11px] mb-1.5">
-                    📊 Totale Giornaliero per Dipendente (${formattaDataGGMMAAAA(dataSelezionata)}) — Soglia riferimento: 8h
+                    📊 Totale Giornaliero per Dipendente / Subappalto (${formattaDataGGMMAAAA(dataSelezionata)})
                 </div>
                 <div class="flex flex-wrap">${badgeHtml}</div>
             `;
@@ -1855,9 +1944,90 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             }
         }
 
+        function toggleInputOreNuovoDip() {
+            const mode = document.getElementById('nuovoDipendenteOreMode').value;
+            const inpCustom = document.getElementById('nuovoDipendenteOreCustom');
+            if (mode === 'custom') {
+                inpCustom.classList.remove('hidden');
+                inpCustom.focus();
+            } else {
+                inpCustom.classList.add('hidden');
+                inpCustom.value = '';
+            }
+        }
+
         function aggiungiDipendente() {
             let val = document.getElementById('nuovoDipendente').value.trim();
-            if (val && !dipendenti.includes(val)) { dipendenti.push(val); document.getElementById('nuovoDipendente').value = ''; salvaStorage(); }
+            if (!val) return;
+            if (dipendenti.some(d => d.nome.toLowerCase() === val.toLowerCase())) {
+                alert("Questo dipendente o impresa è già presente in anagrafica!");
+                return;
+            }
+
+            const mode = document.getElementById('nuovoDipendenteOreMode').value;
+            let oreTarget = 8;
+            let illimitate = false;
+
+            if (mode === 'unlimited') {
+                oreTarget = null;
+                illimitate = true;
+            } else if (mode === 'none') {
+                oreTarget = null;
+                illimitate = false;
+            } else if (mode === 'custom') {
+                const customVal = parseFloat(document.getElementById('nuovoDipendenteOreCustom').value);
+                if (!customVal || customVal <= 0) {
+                    alert("Inserisci un numero di ore valido (> 0) oppure scegli 'Ore illimitate' o 'Nessuna soglia'.");
+                    return;
+                }
+                oreTarget = customVal;
+                illimitate = false;
+            } else {
+                oreTarget = parseFloat(mode);
+                illimitate = false;
+            }
+
+            dipendenti.push({ nome: val, oreTarget, illimitate });
+            document.getElementById('nuovoDipendente').value = '';
+            document.getElementById('nuovoDipendenteOreMode').value = '8';
+            document.getElementById('nuovoDipendenteOreCustom').value = '';
+            document.getElementById('nuovoDipendenteOreCustom').classList.add('hidden');
+            salvaStorage();
+        }
+
+        function modificaOreDipendente(idx) {
+            const d = dipendenti[idx];
+            if (!d) return;
+
+            const attuale = d.illimitate ? "ILLIMITATE" : (d.oreTarget !== null ? String(d.oreTarget) : "NESSUNA");
+            const risposta = prompt(
+                `Imposta ore giornaliere per "${d.nome}" (attuale: ${attuale}):\n\n` +
+                `• Scrivi un numero (es. 8, 6, 4, 32) per impostare il target ore giornaliero\n` +
+                `• Scrivi ILLIMITATE (o ∞) per ore illimitate\n` +
+                `• Lascia vuoto o scrivi NESSUNA per nessuna soglia/controllo`,
+                d.illimitate ? "ILLIMITATE" : (d.oreTarget !== null ? String(d.oreTarget) : "")
+            );
+
+            if (risposta === null) return;
+            const pulita = risposta.trim().toUpperCase();
+
+            if (pulita === "ILLIMITATE" || pulita === "ILLIMITATO" || pulita === "∞") {
+                dipendenti[idx].oreTarget = null;
+                dipendenti[idx].illimitate = true;
+            } else if (pulita === "" || pulita === "NESSUNA" || pulita === "NESSUNO") {
+                dipendenti[idx].oreTarget = null;
+                dipendenti[idx].illimitate = false;
+            } else {
+                const num = parseFloat(pulita.replace(',', '.'));
+                if (isNaN(num) || num <= 0) {
+                    alert("Valore non valido. Inserisci un numero maggiore di 0, 'ILLIMITATE' oppure lascia vuoto.");
+                    return;
+                }
+                dipendenti[idx].oreTarget = num;
+                dipendenti[idx].illimitate = false;
+            }
+
+            salvaStorage();
         }
         function aggiungiCantiere() {
             let val = document.getElementById('nuovoCantiere').value.trim();
