@@ -293,7 +293,7 @@
             <div id="sec-consuntivo" class="sezione-app bg-gradient-to-br from-amber-50/80 to-orange-50/40 p-4 md:p-6 rounded-xl border border-amber-200 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-base md:text-lg font-bold text-amber-950 flex items-center gap-2">📑 Consuntivo Lavori Cantiere</h2>
-                    <p class="text-xs text-slate-600 mt-0.5">Calcola il totale economico tra Manodopera, Mezzi e Materiali</p>
+                    <p class="text-xs text-slate-600 mt-0.5">Calcola il totale economico tra Manodopera effettiva, Mezzi e Materiali (CIG pioggia, malattia, ferie e permessi a € 0,00)</p>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 bg-white p-4 rounded-xl border border-amber-200/80 shadow-sm mb-6">
@@ -357,13 +357,13 @@
                     </div>
 
                     <div>
-                        <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">👷 1. Ore Lavorate (Manodopera & Mezzi)</h4>
+                        <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">👷 1. Ore Lavorate e Assenze (Manodopera & Mezzi)</h4>
                         <div class="overflow-x-auto border border-slate-200 rounded-xl">
                             <table class="w-full text-left border-collapse text-xs min-w-[520px]">
                                 <thead>
                                     <tr class="bg-slate-100 text-slate-700 uppercase border-b border-slate-200">
                                         <th class="p-2.5 border-r">Dipendente / Risorsa</th>
-                                        <th class="p-2.5 border-r">Attività</th>
+                                        <th class="p-2.5 border-r">Attività / Causale</th>
                                         <th class="p-2.5 border-r text-center">Presenze</th>
                                         <th class="p-2.5 border-r text-right">Ore</th>
                                         <th class="p-2.5 border-r text-right">Tariffa</th>
@@ -417,7 +417,7 @@
                             <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-2">📊 Riepilogo Economico Finale</h4>
                             <div class="space-y-2 text-xs">
                                 <div class="flex justify-between items-center gap-2">
-                                    <span class="text-slate-600">Manodopera (<span id="sintesiOreManodopera">0h</span> × <span id="sintesiTariffaManodopera">€0/h</span>):</span>
+                                    <span class="text-slate-600">Manodopera effettiva (<span id="sintesiOreManodopera">0h</span> × <span id="sintesiTariffaManodopera">€0/h</span>):</span>
                                     <span id="sintesiTotaleManodopera" class="font-bold text-blue-900 whitespace-nowrap">€ 0,00</span>
                                 </div>
                                 <div class="flex justify-between items-center gap-2">
@@ -611,7 +611,7 @@
             }
         }
 
-async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella = "Rapportini giornalieri", cantiere = "") {
+        async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella = "Rapportini giornalieri", cantiere = "") {
             if (!URL_GOOGLE_DRIVE || URL_GOOGLE_DRIVE.includes("INCOLLA_QUI")) return;
             try {
                 mostraNotificaCloud("Salvataggio PDF su Google Drive...", "info");
@@ -1016,7 +1016,7 @@ async function inviaPDFAlCloud(dataRiferimento, nomeFilePDF, docJsPDF, cartella 
             });
         }
 
-function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra = false) {
+        function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra = false) {
             let optionsCausali = '';
             optionsCausali += '<optgroup label="Cantieri">';
             cantieri.forEach(c => {
@@ -1100,7 +1100,6 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                         container.appendChild(row);
                     }
                 } else {
-                    // Di default nessun dipendente selezionato: spunta manuale uno ad uno
                     const row = creaElementoRigaDipendente(dep, false, oreDefaultDip, cantierePrincipaleCorrente, false);
                     container.appendChild(row);
                 }
@@ -1484,6 +1483,32 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             }
         }
 
+        // Verifica se una voce/causale corrisponde ad assenze non fatturabili (CIG pioggia, malattia, ferie, permessi o qualsiasi causale nel DB)
+        function isVoceNonLavorativa(voce) {
+            if (!voce) return false;
+            const voceNorm = voce.trim().toLowerCase();
+
+            // 1. Controlla se la voce è registrata nel Database Causali
+            if (Array.isArray(causali) && causali.some(c => c.nome && c.nome.trim().toLowerCase() === voceNorm)) {
+                return true;
+            }
+
+            // 2. Controllo parole chiave standard di assenza / non lavorate
+            const paroleChiaveAssenza = [
+                'cig',
+                'pioggia',
+                'malattia',
+                'ferie',
+                'permess',
+                'infortunio',
+                'assenza',
+                'congedo',
+                'maternit',
+                'paternit'
+            ];
+            return paroleChiaveAssenza.some(kw => voceNorm.includes(kw));
+        }
+
         function calcolaDatiConsuntivo() {
             const cantiere = document.getElementById('selectCantiereConsuntivo').value;
             const dataInizio = document.getElementById('consuntivoDataInizio').value;
@@ -1508,16 +1533,29 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
 
             const mappaOreDip = {};
             let totaleOreManodopera = 0;
+            let totaleOreNonLavorate = 0;
 
             rapFiltrati.forEach(rap => {
                 rap.vociDipendenti.forEach(v => {
+                    const nonLavorativa = isVoceNonLavorativa(v.voce);
                     const key = `${v.dipendente}|||${v.voce}`;
                     if (!mappaOreDip[key]) {
-                        mappaOreDip[key] = { dipendente: v.dipendente, voce: v.voce, giorni: new Set(), ore: 0 };
+                        mappaOreDip[key] = {
+                            dipendente: v.dipendente,
+                            voce: v.voce,
+                            giorni: new Set(),
+                            ore: 0,
+                            nonLavorativa
+                        };
                     }
                     mappaOreDip[key].giorni.add(rap.data);
                     mappaOreDip[key].ore += v.ore;
-                    totaleOreManodopera += v.ore;
+
+                    if (nonLavorativa) {
+                        totaleOreNonLavorate += v.ore;
+                    } else {
+                        totaleOreManodopera += v.ore;
+                    }
                 });
             });
 
@@ -1562,6 +1600,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                 righeOreDip: Object.values(mappaOreDip),
                 righeMezzi: Object.values(mappaMezzi),
                 totaleOreManodopera,
+                totaleOreNonLavorate,
                 totaleOreMezzi,
                 costoTotaleManodopera,
                 costoTotaleMezzi,
@@ -1596,15 +1635,21 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                 tbodyOre.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400 italic">Nessuna ora registrata per questo cantiere nel periodo selezionato.</td></tr>`;
             } else {
                 dati.righeOreDip.forEach(r => {
-                    const importoRiga = r.ore * dati.tariffaManodopera;
+                    const tariffaEffettiva = r.nonLavorativa ? 0 : dati.tariffaManodopera;
+                    const importoRiga = r.ore * tariffaEffettiva;
+                    const rowClass = r.nonLavorativa ? "bg-slate-100/80 text-slate-500" : "hover:bg-slate-50";
+                    const badgeAssenza = r.nonLavorativa
+                        ? `<span class="ml-1.5 inline-block bg-slate-200 text-slate-700 text-[10px] font-bold px-1.5 py-0.5 rounded">A 0 €</span>`
+                        : "";
+
                     tbodyOre.innerHTML += `
-                        <tr class="hover:bg-slate-50">
-                            <td class="p-2.5 border-r font-semibold text-slate-800">👤 ${r.dipendente}</td>
-                            <td class="p-2.5 border-r text-slate-600">${r.voce}</td>
+                        <tr class="${rowClass}">
+                            <td class="p-2.5 border-r font-semibold ${r.nonLavorativa ? 'text-slate-600' : 'text-slate-800'}">👤 ${r.dipendente}</td>
+                            <td class="p-2.5 border-r ${r.nonLavorativa ? 'text-slate-600 font-medium' : 'text-slate-600'}">${r.voce}${badgeAssenza}</td>
                             <td class="p-2.5 border-r text-center text-slate-600">${r.giorni.size} gg</td>
-                            <td class="p-2.5 border-r text-right font-bold text-blue-900">${r.ore.toFixed(2)} h</td>
-                            <td class="p-2.5 border-r text-right text-slate-600">${formatValuta(dati.tariffaManodopera)}/h</td>
-                            <td class="p-2.5 text-right font-bold text-slate-900">${formatValuta(importoRiga)}</td>
+                            <td class="p-2.5 border-r text-right font-bold ${r.nonLavorativa ? 'text-slate-500' : 'text-blue-900'}">${r.ore.toFixed(2)} h</td>
+                            <td class="p-2.5 border-r text-right text-slate-600">${formatValuta(tariffaEffettiva)}/h</td>
+                            <td class="p-2.5 text-right font-bold ${r.nonLavorativa ? 'text-slate-500' : 'text-slate-900'}">${formatValuta(importoRiga)}</td>
                         </tr>
                     `;
                 });
@@ -1736,7 +1781,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(8);
             doc.text("Risorsa / Dipendente", 16, startY + 4.8);
-            doc.text("Attività", 72, startY + 4.8);
+            doc.text("Attività / Causale", 72, startY + 4.8);
             doc.text("Pres.", 116, startY + 4.8, { align: 'center' });
             doc.text("Ore", 138, startY + 4.8, { align: 'right' });
             doc.text("Tariffa", 165, startY + 4.8, { align: 'right' });
@@ -1753,21 +1798,32 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             } else {
                 dati.righeOreDip.forEach((r, idx) => {
                     checkNewPage(7);
-                    if (idx % 2 === 1) {
-                        doc.setFillColor(248, 250, 252);
+                    const tariffaEffettiva = r.nonLavorativa ? 0 : dati.tariffaManodopera;
+                    const importoRiga = r.ore * tariffaEffettiva;
+
+                    if (r.nonLavorativa) {
+                        doc.setFillColor(241, 245, 249);
                         doc.rect(14, startY, 182, 7, 'F');
+                        doc.setTextColor(100, 116, 139);
+                    } else {
+                        if (idx % 2 === 1) {
+                            doc.setFillColor(248, 250, 252);
+                            doc.rect(14, startY, 182, 7, 'F');
+                        }
+                        doc.setTextColor(30, 41, 59);
                     }
                     doc.setDrawColor(226, 232, 240);
                     doc.rect(14, startY, 182, 7);
-                    const importoRiga = r.ore * dati.tariffaManodopera;
+
                     doc.text(r.dipendente, 16, startY + 4.8);
                     doc.text(r.voce, 72, startY + 4.8);
                     doc.text(`${r.giorni.size} gg`, 116, startY + 4.8, { align: 'center' });
                     doc.text(`${r.ore.toFixed(2)} h`, 138, startY + 4.8, { align: 'right' });
-                    doc.text(`${formatValuta(dati.tariffaManodopera)}/h`, 165, startY + 4.8, { align: 'right' });
+                    doc.text(`${formatValuta(tariffaEffettiva)}/h`, 165, startY + 4.8, { align: 'right' });
                     doc.setFont("helvetica", "bold");
                     doc.text(formatValuta(importoRiga), 193, startY + 4.8, { align: 'right' });
                     doc.setFont("helvetica", "normal");
+                    doc.setTextColor(30, 41, 59);
                     startY += 7;
                 });
 
@@ -1796,7 +1852,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             doc.setFont("helvetica", "bold");
             doc.setFontSize(8.5);
             doc.setTextColor(30, 58, 138);
-            doc.text(`Subtotale Manodopera (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 16, startY + 4.8);
+            doc.text(`Subtotale Manodopera effettiva (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 16, startY + 4.8);
             doc.text(formatValuta(dati.costoTotaleManodopera), 193, startY + 4.8, { align: 'right' });
             startY += 7;
 
@@ -1909,7 +1965,7 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
 
             doc.setFont("helvetica", "normal");
             doc.setFontSize(9);
-            doc.text(`• Totale Manodopera (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 18, startY + 14);
+            doc.text(`• Totale Manodopera effettiva (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 18, startY + 14);
             doc.setFont("helvetica", "bold");
             doc.text(formatValuta(dati.costoTotaleManodopera), 192, startY + 14, { align: 'right' });
 
@@ -2188,7 +2244,6 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                 return;
             }
 
-            // Controllo data diversa da oggi in fase di nuovo inserimento
             const oggiISO = getDataOggiISO();
             if (!editSessionId && data !== oggiISO) {
                 const confermaData = confirm(
@@ -2199,7 +2254,6 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
                 if (!confermaData) return;
             }
 
-            // Controllo se esiste già un rapportino con la stessa data e lo stesso cantiere
             const idxDuplicato = rapportini.findIndex(r =>
                 r.data === data &&
                 r.cantierePrincipale === cantierePrincipale &&
@@ -2368,14 +2422,16 @@ function creaElementoRigaDipendente(dep, spuntato, oreVal, causaleVal, isExtra =
             let rap = rapportini[index];
             generaPDFOggetto(rap, true);
         }
-function formattaDataGGMMAAAA(dataStr) {
-  if (!dataStr) return '';
-  const parti = dataStr.toString().split('-');
-  if (parti.length === 3) {
-    return `${parti[2]}-${parti[1]}-${parti[0]}`;
-  }
-  return dataStr;
-}
+
+        function formattaDataGGMMAAAA(dataStr) {
+            if (!dataStr) return '';
+            const parti = dataStr.toString().split('-');
+            if (parti.length === 3) {
+                return `${parti[2]}-${parti[1]}-${parti[0]}`;
+            }
+            return dataStr;
+        }
+
         function generaPDFOggetto(rap, scaricaAncheSulTelefono = true) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -2691,382 +2747,4 @@ function formattaDataGGMMAAAA(dataStr) {
                     let totOreVoce = 0;
                     for (let d = 1; d <= numGiorni; d++) {
                         let dateObj = new Date(anno, mese - 1, d);
-                        let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
-                        let x = startX + (d - 1) * cellW;
-
-                        doc.setDrawColor(210, 215, 220);
-                        if (isFestivo) {
-                            doc.setFillColor(255, 242, 204);
-                            doc.rect(x, currentY, cellW, cellH, 'F');
-                        } else {
-                            doc.setFillColor(r, g, b);
-                            doc.rect(x, currentY, cellW, cellH, 'F');
-                        }
-                        doc.rect(x, currentY, cellW, cellH);
-
-                        let dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                        let oreGiornoVoce = getOreDipendenteGiorno(dep, dataStr, item.nome);
-
-                        if (oreGiornoVoce > 0) {
-                            doc.setFont("helvetica", "bold");
-                            doc.setTextColor(30, 41, 59);
-                            doc.text(String(oreGiornoVoce), x + cellW / 2, currentY + 4.2, { align: 'center' });
-                            totOreVoce += oreGiornoVoce;
-                            totaliGiornalieri[d] += oreGiornoVoce;
-                        }
-                    }
-
-                    doc.setFillColor(230, 235, 240);
-                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH, 'F');
-                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH);
-                    doc.setFont("helvetica", "bold");
-                    doc.setTextColor(30, 41, 59);
-                    doc.text(totOreVoce.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.2, { align: 'center' });
-
-                    currentY += cellH;
-                });
-
-                doc.setFillColor(217, 217, 217);
-                doc.rect(14, currentY, 38, 7, 'F');
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(6.5);
-                doc.setTextColor(30, 41, 59);
-                doc.text("TOTALE ORE GIORNALIERO", 16, currentY + 4.5);
-
-                let totaleComplessivoMese = 0;
-                for (let d = 1; d <= numGiorni; d++) {
-                    let dateObj = new Date(anno, mese - 1, d);
-                    let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
-                    let x = startX + (d - 1) * cellW;
-
-                    if (isFestivo) {
-                        doc.setFillColor(255, 242, 204);
-                        doc.rect(x, currentY, cellW, 7, 'F');
-                    } else {
-                        doc.setFillColor(217, 217, 217);
-                        doc.rect(x, currentY, cellW, 7, 'F');
-                    }
-                    doc.rect(x, currentY, cellW, 7);
-
-                    if (totaliGiornalieri[d] > 0) {
-                        doc.setFontSize(7.5);
-                        doc.text(String(totaliGiornalieri[d]), x + cellW / 2, currentY + 4.5, { align: 'center' });
-                        totaleComplessivoMese += totaliGiornalieri[d];
-                    }
-                }
-
-                doc.setFillColor(200, 205, 210);
-                doc.rect(startX + numGiorni * cellW, currentY, 12, 7, 'F');
-                doc.rect(startX + numGiorni * cellW, currentY, 12, 7);
-                doc.setFontSize(7.5);
-                doc.text(totaleComplessivoMese.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.5, { align: 'center' });
-
-                startY = currentY + 12;
-            });
-
-            const nomeFile = `Tabella_Presenze_Mensile_${nomeMeseStr}_${anno}.pdf`;
-            doc.save(nomeFile);
-
-            inviaPDFAlCloud(`${meseInput}-01`, nomeFile, doc, "Report mensili");
-        }
-
-        function esportaCantierePDF() {
-            let meseInput = document.getElementById('inputMeseCantiere').value;
-            let cantiereScelto = document.getElementById('selectCantiereExport').value;
-
-            if (!meseInput || !cantiereScelto) {
-                alert("Seleziona un mese e un cantiere validi!");
-                return;
-            }
-
-            let [anno, mese] = meseInput.split('-').map(Number);
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('landscape', 'mm', 'a4');
-
-            const mesiIt = ["", "GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO", "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"];
-            const giorniAbbr = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
-            const nomeMeseStr = mesiIt[mese];
-            const numGiorni = new Date(anno, mese, 0).getDate();
-
-            let imgElement = document.getElementById('logoAziendaleImg');
-            let imgData = null;
-            try {
-                let canvas = document.createElement('canvas');
-                canvas.width = imgElement.naturalWidth || 800;
-                canvas.height = imgElement.naturalHeight || 120;
-                let ctx = canvas.getContext('2d');
-                ctx.drawImage(imgElement, 0, 0);
-                imgData = canvas.toDataURL('image/jpeg');
-            } catch(e) {}
-
-            function disegnaIntestazioneCantiere() {
-                if (imgData) doc.addImage(imgData, 'JPEG', 14, 8, 269, 14);
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(11);
-                doc.setTextColor(30, 41, 59);
-                doc.text(`REPORT MENSILE CANTIERE "${cantiereScelto.toUpperCase()}" "${nomeMeseStr} ${anno}"`, 148.5, 27, { align: 'center' });
-            }
-
-            disegnaIntestazioneCantiere();
-            let startY = 33;
-
-            let dipendentiSulCantiere = new Set();
-            rapportini.forEach(rap => {
-                let [pAnno, pMese] = rap.data.split('-').map(Number);
-                if (rap.cantierePrincipale === cantiereScelto && pAnno === anno && pMese === mese) {
-                    rap.vociDipendenti.forEach(v => {
-                        if (v.voce === cantiereScelto) dipendentiSulCantiere.add(v.dipendente);
-                    });
-                }
-            });
-
-            if (dipendentiSulCantiere.size === 0) {
-                alert("Nessuna registrazione trovata per questo cantiere nel mese selezionato!");
-                return;
-            }
-
-            let cellW = 7.2;
-            let startX = 52;
-            let topY = startY + 4;
-            let cellH = 6.5;
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-            doc.setTextColor(192, 0, 0);
-            doc.text(`Ore Lavorate per Dipendente`, 14, startY);
-
-            doc.setFillColor(51, 51, 51);
-            doc.rect(startX, topY, cellW * numGiorni + 12, 9, 'F');
-            doc.setFontSize(7.5);
-            doc.setTextColor(255, 255, 255);
-
-            for (let g = 1; g <= numGiorni; g++) {
-                let dateObj = new Date(anno, mese - 1, g);
-                let dow = dateObj.getDay();
-                let isFestivo = (dow === 0 || dow === 6);
-                let x = startX + (g - 1) * cellW;
-
-                if (isFestivo) {
-                    doc.setFillColor(255, 192, 0);
-                    doc.rect(x, topY, cellW, 9, 'F');
-                    doc.setTextColor(192, 0, 0);
-                } else {
-                    doc.setTextColor(255, 255, 255);
-                }
-                doc.text(giorniAbbr[dow], x + cellW / 2, topY + 3, { align: 'center' });
-                doc.text(String(g).padStart(2, '0'), x + cellW / 2, topY + 7, { align: 'center' });
-            }
-
-            doc.setFillColor(51, 51, 51);
-            doc.rect(startX + numGiorni * cellW, topY, 12, 9, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.text("TOTALE", startX + numGiorni * cellW + 6, topY + 3, { align: 'center' });
-            doc.text("ORE", startX + numGiorni * cellW + 6, topY + 7, { align: 'center' });
-
-            let currentY = topY + 9;
-            let totaliGiornalieriDip = new Array(numGiorni + 1).fill(0);
-
-            dipendentiSulCantiere.forEach(dep => {
-                doc.setFillColor(240, 243, 246);
-                doc.rect(14, currentY, 38, cellH, 'F');
-                doc.setFontSize(7.5);
-                doc.setFont("helvetica", "bold");
-                doc.setTextColor(30, 41, 59);
-                let nomeTroncato = dep.length > 20 ? dep.substring(0, 18) + '...' : dep;
-                doc.text(nomeTroncato, 16, currentY + 4.2);
-
-                let totOreDep = 0;
-                for (let d = 1; d <= numGiorni; d++) {
-                    let dateObj = new Date(anno, mese - 1, d);
-                    let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
-                    let x = startX + (d - 1) * cellW;
-
-                    doc.setDrawColor(210, 215, 220);
-                    if (isFestivo) {
-                        doc.setFillColor(255, 242, 204);
-                        doc.rect(x, currentY, cellW, cellH, 'F');
-                    } else {
-                        doc.setFillColor(255, 255, 255);
-                        doc.rect(x, currentY, cellW, cellH, 'F');
-                    }
-                    doc.rect(x, currentY, cellW, cellH);
-
-                    let dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                    let oreGiornoDep = 0;
-                    rapportini.forEach(rap => {
-                        let [pAnno, pMese] = rap.data.split('-').map(Number);
-                        if (rap.cantierePrincipale === cantiereScelto && rap.data === dataStr && pAnno === anno && pMese === mese) {
-                            rap.vociDipendenti.forEach(v => {
-                                if (v.dipendente === dep && v.voce === cantiereScelto) oreGiornoDep += v.ore;
-                            });
-                        }
-                    });
-
-                    if (oreGiornoDep > 0) {
-                        doc.setFont("helvetica", "bold");
-                        doc.setTextColor(30, 41, 59);
-                        doc.text(String(oreGiornoDep), x + cellW / 2, currentY + 4.2, { align: 'center' });
-                        totOreDep += oreGiornoDep;
-                        totaliGiornalieriDip[d] += oreGiornoDep;
-                    }
-                }
-
-                doc.setFillColor(230, 235, 240);
-                doc.rect(startX + numGiorni * cellW, currentY, 12, cellH, 'F');
-                doc.rect(startX + numGiorni * cellW, currentY, 12, cellH);
-                doc.setFont("helvetica", "bold");
-                doc.setTextColor(30, 41, 59);
-                doc.text(totOreDep.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.2, { align: 'center' });
-
-                currentY += cellH;
-            });
-
-            doc.setFillColor(217, 217, 217);
-            doc.rect(14, currentY, 38, 7, 'F');
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(6.5);
-            doc.setTextColor(30, 41, 59);
-            doc.text("TOTALE ORE GIORNALIERO", 16, currentY + 4.5);
-
-            let totaleComplessivoOre = 0;
-            for (let d = 1; d <= numGiorni; d++) {
-                let dateObj = new Date(anno, mese - 1, d);
-                let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
-                let x = startX + (d - 1) * cellW;
-
-                if (isFestivo) {
-                    doc.setFillColor(255, 242, 204);
-                    doc.rect(x, currentY, cellW, 7, 'F');
-                } else {
-                    doc.setFillColor(217, 217, 217);
-                    doc.rect(x, currentY, cellW, 7, 'F');
-                }
-                doc.rect(x, currentY, cellW, 7);
-
-                if (totaliGiornalieriDip[d] > 0) {
-                    doc.setFontSize(7.5);
-                    doc.text(String(totaliGiornalieriDip[d]), x + cellW / 2, currentY + 4.5, { align: 'center' });
-                    totaleComplessivoOre += totaliGiornalieriDip[d];
-                }
-            }
-
-            doc.setFillColor(200, 205, 210);
-            doc.rect(startX + numGiorni * cellW, currentY, 12, 7, 'F');
-            doc.rect(startX + numGiorni * cellW, currentY, 12, 7);
-            doc.setFontSize(7.5);
-            doc.text(totaleComplessivoOre.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.5, { align: 'center' });
-
-            currentY += 14;
-
-            let mezziSulCantiere = new Set();
-            rapportini.forEach(rap => {
-                let [pAnno, pMese] = rap.data.split('-').map(Number);
-                if (rap.cantierePrincipale === cantiereScelto && pAnno === anno && pMese === mese) {
-                    if (rap.mezziObj) rap.mezziObj.forEach(mo => mezziSulCantiere.add(mo.nome));
-                }
-            });
-
-            if (mezziSulCantiere.size > 0) {
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(10);
-                doc.setTextColor(192, 0, 0);
-                doc.text(`Automezzi Utilizzati sul Cantiere (Ore di Utilizzo)`, 14, currentY);
-
-                let topYMezzi = currentY + 4;
-                currentY += 13;
-
-                doc.setFillColor(51, 51, 51);
-                doc.rect(startX, topYMezzi, cellW * numGiorni + 12, 9, 'F');
-                doc.setFontSize(7.5);
-                doc.setTextColor(255, 255, 255);
-
-                for (let g = 1; g <= numGiorni; g++) {
-                    let dateObj = new Date(anno, mese - 1, g);
-                    let dow = dateObj.getDay();
-                    let isFestivo = (dow === 0 || dow === 6);
-                    let x = startX + (g - 1) * cellW;
-
-                    if (isFestivo) {
-                        doc.setFillColor(255, 192, 0);
-                        doc.rect(x, topYMezzi, cellW, 9, 'F');
-                        doc.setTextColor(192, 0, 0);
-                    } else {
-                        doc.setTextColor(255, 255, 255);
-                    }
-                    doc.text(giorniAbbr[dow], x + cellW / 2, topYMezzi + 3, { align: 'center' });
-                    doc.text(String(g).padStart(2, '0'), x + cellW / 2, topYMezzi + 7, { align: 'center' });
-                }
-
-                doc.setFillColor(51, 51, 51);
-                doc.rect(startX + numGiorni * cellW, topYMezzi, 12, 9, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.text("TOTALE", startX + numGiorni * cellW + 6, topYMezzi + 3, { align: 'center' });
-                doc.text("ORE", startX + numGiorni * cellW + 6, topYMezzi + 7, { align: 'center' });
-
-                mezziSulCantiere.forEach(mezzoName => {
-                    doc.setFillColor(254, 243, 199);
-                    doc.rect(14, currentY, 38, cellH, 'F');
-                    doc.setFontSize(7.5);
-                    doc.setFont("helvetica", "bold");
-                    doc.setTextColor(30, 41, 59);
-                    let mezzoTroncato = mezzoName.length > 20 ? mezzoName.substring(0, 18) + '...' : mezzoName;
-                    doc.text(mezzoTroncato, 16, currentY + 4.2);
-
-                    let totOreMezzo = 0;
-                    for (let d = 1; d <= numGiorni; d++) {
-                        let dateObj = new Date(anno, mese - 1, d);
-                        let isFestivo = (dateObj.getDay() === 0 || dateObj.getDay() === 6);
-                        let x = startX + (d - 1) * cellW;
-
-                        doc.setDrawColor(210, 215, 220);
-                        if (isFestivo) {
-                            doc.setFillColor(255, 242, 204);
-                            doc.rect(x, currentY, cellW, cellH, 'F');
-                        } else {
-                            doc.setFillColor(255, 251, 235);
-                            doc.rect(x, currentY, cellW, cellH, 'F');
-                        }
-                        doc.rect(x, currentY, cellW, cellH);
-
-                        let dataStr = `${anno}-${String(mese).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                        let oreMezzoGiorno = 0;
-
-                        rapportini.forEach(rap => {
-                            let [pAnno, pMese] = rap.data.split('-').map(Number);
-                            if (rap.cantierePrincipale === cantiereScelto && rap.data === dataStr && pAnno === anno && pMese === mese) {
-                                if (rap.mezziObj) {
-                                    let found = rap.mezziObj.find(mo => mo.nome === mezzoName);
-                                    if (found) oreMezzoGiorno += found.ore;
-                                }
-                            }
-                        });
-
-                        if (oreMezzoGiorno > 0) {
-                            doc.setFont("helvetica", "bold");
-                            doc.setTextColor(180, 83, 9);
-                            doc.text(String(oreMezzoGiorno), x + cellW / 2, currentY + 4.2, { align: 'center' });
-                            totOreMezzo += oreMezzoGiorno;
-                        }
-                    }
-
-                    doc.setFillColor(253, 230, 138);
-                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH, 'F');
-                    doc.rect(startX + numGiorni * cellW, currentY, 12, cellH);
-                    doc.setFont("helvetica", "bold");
-                    doc.setTextColor(180, 83, 9);
-                    doc.text(totOreMezzo.toFixed(2), startX + numGiorni * cellW + 6, currentY + 4.2, { align: 'center' });
-
-                    currentY += cellH;
-                });
-            }
-
-            const nomeFile = `Report_Cantiere_${cantiereScelto.replace(/\s+/g, '_')}_${nomeMeseStr}_${anno}.pdf`;
-            doc.save(nomeFile);
-
-            inviaPDFAlCloud(`${meseInput}-01`, nomeFile, doc, "Report cantiere");
-        }
-
-        aggiornaInterfaccia();
-    </script>
-</body>
-</html>
+                        let isFestivo
