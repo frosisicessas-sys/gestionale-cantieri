@@ -293,7 +293,7 @@
             <div id="sec-consuntivo" class="sezione-app bg-gradient-to-br from-amber-50/80 to-orange-50/40 p-4 md:p-6 rounded-xl border border-amber-200 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-base md:text-lg font-bold text-amber-950 flex items-center gap-2">📑 Consuntivo Lavori Cantiere</h2>
-                    <p class="text-xs text-slate-600 mt-0.5">Calcola il totale economico tra Manodopera effettiva, Mezzi e Materiali (CIG pioggia, malattia, ferie e permessi a € 0,00)</p>
+                    <p class="text-xs text-slate-600 mt-0.5">Calcola il totale economico tra Manodopera effettiva, Mezzi, Materiali ed eventuali Spese Generali / Utile d'Impresa</p>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 bg-white p-4 rounded-xl border border-amber-200/80 shadow-sm mb-6">
@@ -319,6 +319,40 @@
                         <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Al (Opzionale)</label>
                         <input type="date" id="consuntivoDataFine" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
+
+                    <!-- MAGGIORAZIONI OPZIONALI: SPESE GENERALI & UTILE D'IMPRESA -->
+                    <div class="sm:col-span-2 lg:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-3 pt-2.5 border-t border-slate-100">
+                        <!-- Spese Generali -->
+                        <div class="flex items-center justify-between gap-3 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200">
+                            <label class="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+                                <input type="checkbox" id="chkSpeseGenerali" onchange="toggleInputMaggiorazione('spese'); aggiornaConsuntivoSeVisibile();" class="w-4 h-4 text-indigo-600 rounded cursor-pointer">
+                                <div>
+                                    <span class="block text-xs font-bold text-slate-800 uppercase">Spese Generali</span>
+                                    <span class="block text-[10px] text-slate-500">Calcolate sul totale costi diretti</span>
+                                </div>
+                            </label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="percSpeseGenerali" step="0.5" min="0" max="500" value="15" disabled oninput="aggiornaConsuntivoSeVisibile()" class="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white text-right font-bold text-indigo-900 disabled:opacity-40 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <span class="text-xs font-bold text-slate-600">%</span>
+                            </div>
+                        </div>
+
+                        <!-- Utile d'Impresa -->
+                        <div class="flex items-center justify-between gap-3 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200">
+                            <label class="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+                                <input type="checkbox" id="chkUtileImpresa" onchange="toggleInputMaggiorazione('utile'); aggiornaConsuntivoSeVisibile();" class="w-4 h-4 text-purple-600 rounded cursor-pointer">
+                                <div>
+                                    <span class="block text-xs font-bold text-slate-800 uppercase">Utile d'Impresa</span>
+                                    <span class="block text-[10px] text-slate-500">Applicato sul totale + eventuali spese generali</span>
+                                </div>
+                            </label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="percUtileImpresa" step="0.5" min="0" max="500" value="10" disabled oninput="aggiornaConsuntivoSeVisibile()" class="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white text-right font-bold text-purple-900 disabled:opacity-40 focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                                <span class="text-xs font-bold text-slate-600">%</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="sm:col-span-2 lg:col-span-6 flex flex-col sm:flex-row justify-end gap-2.5 pt-2 border-t border-slate-100">
                         <button type="button" onclick="generaConsuntivoSchermo()" class="w-full sm:w-auto bg-amber-600 text-white py-3 px-6 rounded-xl text-xs md:text-sm font-bold hover:bg-amber-700 active:scale-95 transition shadow-sm">
                             🔍 Elabora Consuntivo Lavori
@@ -348,6 +382,14 @@
                             <div class="bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl text-right">
                                 <span class="block text-[10px] font-bold text-emerald-600 uppercase">Materiali</span>
                                 <span id="kpiTotaleMateriali" class="text-xs md:text-sm font-extrabold text-emerald-900">€ 0,00</span>
+                            </div>
+                            <div id="boxKpiSpeseGenerali" class="hidden bg-indigo-50 border border-indigo-200 px-3 py-2 rounded-xl text-right">
+                                <span id="lblKpiSpeseGenerali" class="block text-[10px] font-bold text-indigo-600 uppercase">Spese Gen.</span>
+                                <span id="kpiSpeseGenerali" class="text-xs md:text-sm font-extrabold text-indigo-900">€ 0,00</span>
+                            </div>
+                            <div id="boxKpiUtileImpresa" class="hidden bg-purple-50 border border-purple-200 px-3 py-2 rounded-xl text-right">
+                                <span id="lblKpiUtileImpresa" class="block text-[10px] font-bold text-purple-600 uppercase">Utile Impr.</span>
+                                <span id="kpiUtileImpresa" class="text-xs md:text-sm font-extrabold text-purple-900">€ 0,00</span>
                             </div>
                             <div class="bg-slate-900 border border-slate-700 px-3.5 py-2 rounded-xl text-right shadow-sm">
                                 <span class="block text-[10px] font-bold text-amber-400 uppercase">TOTALE LAVORI</span>
@@ -427,6 +469,20 @@
                                 <div class="flex justify-between items-center gap-2">
                                     <span class="text-slate-600">Materiali (<span id="sintesiNumDoc">0</span> DDT/Fatture):</span>
                                     <span id="sintesiSpesaMateriali" class="font-bold text-emerald-800 whitespace-nowrap">€ 0,00</span>
+                                </div>
+
+                                <!-- Righe opzionali visibili solo se spuntate -->
+                                <div id="rigaSintesiSubtotaleDiretti" class="hidden flex justify-between items-center gap-2 pt-2 border-t border-slate-200">
+                                    <span class="font-semibold text-slate-700">Totale Costi Diretti:</span>
+                                    <span id="sintesiSubtotaleDiretti" class="font-bold text-slate-800 whitespace-nowrap">€ 0,00</span>
+                                </div>
+                                <div id="rigaSintesiSpeseGenerali" class="hidden flex justify-between items-center gap-2">
+                                    <span class="text-indigo-800 font-medium">Spese Generali (<span id="sintesiPercSpeseGenerali">0%</span>):</span>
+                                    <span id="sintesiImportoSpeseGenerali" class="font-bold text-indigo-900 whitespace-nowrap">€ 0,00</span>
+                                </div>
+                                <div id="rigaSintesiUtileImpresa" class="hidden flex justify-between items-center gap-2">
+                                    <span class="text-purple-800 font-medium">Utile d'Impresa (<span id="sintesiPercUtileImpresa">0%</span>):</span>
+                                    <span id="sintesiImportoUtileImpresa" class="font-bold text-purple-900 whitespace-nowrap">€ 0,00</span>
                                 </div>
                             </div>
                             <div class="flex justify-between items-center text-sm md:text-base pt-3 border-t-2 border-slate-300 mt-2">
@@ -689,6 +745,29 @@
         const savedTariffaMezzi = localStorage.getItem('gestionale_tariffa_mezzi');
         if (savedTariffaMan !== null) document.getElementById('costoOrarioManodopera').value = savedTariffaMan;
         if (savedTariffaMezzi !== null) document.getElementById('costoOrarioMezzi').value = savedTariffaMezzi;
+
+        const savedSpeseAttive = localStorage.getItem('gestionale_spese_generali_attive') === 'true';
+        const savedSpesePerc = localStorage.getItem('gestionale_spese_generali_perc');
+        const savedUtileAttivo = localStorage.getItem('gestionale_utile_impresa_attivo') === 'true';
+        const savedUtilePerc = localStorage.getItem('gestionale_utile_impresa_perc');
+
+        document.getElementById('chkSpeseGenerali').checked = savedSpeseAttive;
+        if (savedSpesePerc !== null) document.getElementById('percSpeseGenerali').value = savedSpesePerc;
+        document.getElementById('percSpeseGenerali').disabled = !savedSpeseAttive;
+
+        document.getElementById('chkUtileImpresa').checked = savedUtileAttivo;
+        if (savedUtilePerc !== null) document.getElementById('percUtileImpresa').value = savedUtilePerc;
+        document.getElementById('percUtileImpresa').disabled = !savedUtileAttivo;
+
+        function toggleInputMaggiorazione(tipo) {
+            if (tipo === 'spese') {
+                const attivo = document.getElementById('chkSpeseGenerali').checked;
+                document.getElementById('percSpeseGenerali').disabled = !attivo;
+            } else if (tipo === 'utile') {
+                const attivo = document.getElementById('chkUtileImpresa').checked;
+                document.getElementById('percUtileImpresa').disabled = !attivo;
+            }
+        }
 
         const oggi = new Date();
         document.getElementById('inputData').valueAsDate = oggi;
@@ -1516,8 +1595,17 @@
             const tariffaManodopera = parseFloat(document.getElementById('costoOrarioManodopera').value) || 0;
             const tariffaMezzi = parseFloat(document.getElementById('costoOrarioMezzi').value) || 0;
 
+            const applicaSpeseGenerali = document.getElementById('chkSpeseGenerali').checked;
+            const percSpeseGenerali = parseFloat(document.getElementById('percSpeseGenerali').value) || 0;
+            const applicaUtileImpresa = document.getElementById('chkUtileImpresa').checked;
+            const percUtileImpresa = parseFloat(document.getElementById('percUtileImpresa').value) || 0;
+
             localStorage.setItem('gestionale_tariffa_manodopera', tariffaManodopera);
             localStorage.setItem('gestionale_tariffa_mezzi', tariffaMezzi);
+            localStorage.setItem('gestionale_spese_generali_attive', applicaSpeseGenerali);
+            localStorage.setItem('gestionale_spese_generali_perc', percSpeseGenerali);
+            localStorage.setItem('gestionale_utile_impresa_attivo', applicaUtileImpresa);
+            localStorage.setItem('gestionale_utile_impresa_perc', percUtileImpresa);
 
             if (!cantiere) {
                 alert("Seleziona un cantiere per elaborare il consuntivo!");
@@ -1589,7 +1677,23 @@
                 totaleSpesaMateriali += doc.totaleDocumento;
             });
 
-            const totaleGeneraleConsuntivo = costoTotaleManodopera + costoTotaleMezzi + totaleSpesaMateriali;
+            // Calcolo a cascata:
+            // 1. Subtotale costi diretti (Manodopera + Mezzi + Materiali)
+            const subtotaleCostiDiretti = costoTotaleManodopera + costoTotaleMezzi + totaleSpesaMateriali;
+
+            // 2. Spese generali sul totale costi diretti (solo se spuntate)
+            const importoSpeseGenerali = applicaSpeseGenerali
+                ? subtotaleCostiDiretti * (percSpeseGenerali / 100)
+                : 0;
+
+            const totaleConSpeseGenerali = subtotaleCostiDiretti + importoSpeseGenerali;
+
+            // 3. Utile d'impresa applicato sul totale maggiorato delle spese generali (solo se spuntato)
+            const importoUtileImpresa = applicaUtileImpresa
+                ? totaleConSpeseGenerali * (percUtileImpresa / 100)
+                : 0;
+
+            const totaleGeneraleConsuntivo = totaleConSpeseGenerali + importoUtileImpresa;
 
             return {
                 cantiere,
@@ -1606,6 +1710,14 @@
                 costoTotaleMezzi,
                 documentiMateriali: matFiltrati,
                 totaleSpesaMateriali,
+                subtotaleCostiDiretti,
+                applicaSpeseGenerali,
+                percSpeseGenerali,
+                importoSpeseGenerali,
+                totaleConSpeseGenerali,
+                applicaUtileImpresa,
+                percUtileImpresa,
+                importoUtileImpresa,
                 totaleGeneraleConsuntivo
             };
         }
@@ -1626,6 +1738,27 @@
             document.getElementById('kpiCostoManodopera').textContent = `${formatValuta(dati.costoTotaleManodopera)} (${dati.totaleOreManodopera.toFixed(1)}h)`;
             document.getElementById('kpiCostoMezzi').textContent = `${formatValuta(dati.costoTotaleMezzi)} (${dati.totaleOreMezzi.toFixed(1)}h)`;
             document.getElementById('kpiTotaleMateriali').textContent = formatValuta(dati.totaleSpesaMateriali);
+
+            // KPI Spese Generali (mostra solo se spuntato)
+            const boxKpiSpese = document.getElementById('boxKpiSpeseGenerali');
+            if (dati.applicaSpeseGenerali) {
+                boxKpiSpese.classList.remove('hidden');
+                document.getElementById('lblKpiSpeseGenerali').textContent = `Spese Gen. (${dati.percSpeseGenerali}%)`;
+                document.getElementById('kpiSpeseGenerali').textContent = formatValuta(dati.importoSpeseGenerali);
+            } else {
+                boxKpiSpese.classList.add('hidden');
+            }
+
+            // KPI Utile d'Impresa (mostra solo se spuntato)
+            const boxKpiUtile = document.getElementById('boxKpiUtileImpresa');
+            if (dati.applicaUtileImpresa) {
+                boxKpiUtile.classList.remove('hidden');
+                document.getElementById('lblKpiUtileImpresa').textContent = `Utile Impr. (${dati.percUtileImpresa}%)`;
+                document.getElementById('kpiUtileImpresa').textContent = formatValuta(dati.importoUtileImpresa);
+            } else {
+                boxKpiUtile.classList.add('hidden');
+            }
+
             document.getElementById('kpiTotaleGenerale').textContent = formatValuta(dati.totaleGeneraleConsuntivo);
 
             const tbodyOre = document.getElementById('consuntivoTabellaOre');
@@ -1718,6 +1851,36 @@
 
             document.getElementById('sintesiNumDoc').textContent = dati.documentiMateriali.length;
             document.getElementById('sintesiSpesaMateriali').textContent = formatValuta(dati.totaleSpesaMateriali);
+
+            // Mostra Subtotale Costi Diretti solo se almeno una delle due maggiorazioni è spuntata
+            const rigaSubDiretti = document.getElementById('rigaSintesiSubtotaleDiretti');
+            if (dati.applicaSpeseGenerali || dati.applicaUtileImpresa) {
+                rigaSubDiretti.classList.remove('hidden');
+                document.getElementById('sintesiSubtotaleDiretti').textContent = formatValuta(dati.subtotaleCostiDiretti);
+            } else {
+                rigaSubDiretti.classList.add('hidden');
+            }
+
+            // Mostra Spese Generali solo se spuntate
+            const rigaSpese = document.getElementById('rigaSintesiSpeseGenerali');
+            if (dati.applicaSpeseGenerali) {
+                rigaSpese.classList.remove('hidden');
+                document.getElementById('sintesiPercSpeseGenerali').textContent = `${dati.percSpeseGenerali}%`;
+                document.getElementById('sintesiImportoSpeseGenerali').textContent = formatValuta(dati.importoSpeseGenerali);
+            } else {
+                rigaSpese.classList.add('hidden');
+            }
+
+            // Mostra Utile d'Impresa solo se spuntato
+            const rigaUtile = document.getElementById('rigaSintesiUtileImpresa');
+            if (dati.applicaUtileImpresa) {
+                rigaUtile.classList.remove('hidden');
+                document.getElementById('sintesiPercUtileImpresa').textContent = `${dati.percUtileImpresa}%`;
+                document.getElementById('sintesiImportoUtileImpresa').textContent = formatValuta(dati.importoUtileImpresa);
+            } else {
+                rigaUtile.classList.add('hidden');
+            }
+
             document.getElementById('sintesiTotaleGenerale').textContent = formatValuta(dati.totaleGeneraleConsuntivo);
         }
 
@@ -1952,10 +2115,19 @@
                 startY += 8;
             }
 
-            checkNewPage(40);
+            // Calcolo altezza dinamica box riepilogo finale in base alle sole voci selezionate
+            const haMaggiorazioni = dati.applicaSpeseGenerali || dati.applicaUtileImpresa;
+            let righeExtraBox = 0;
+            if (haMaggiorazioni) righeExtraBox += 1; // Subtotale costi diretti
+            if (dati.applicaSpeseGenerali) righeExtraBox += 1;
+            if (dati.applicaUtileImpresa) righeExtraBox += 1;
+
+            const altezzaBoxRiepilogo = 29 + (righeExtraBox * 5.8);
+            checkNewPage(altezzaBoxRiepilogo + 14);
+
             doc.setFillColor(241, 245, 249);
             doc.setDrawColor(148, 163, 184);
-            doc.rect(14, startY, 182, 34, 'FD');
+            doc.rect(14, startY, 182, altezzaBoxRiepilogo, 'FD');
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(10);
@@ -1963,23 +2135,56 @@
             doc.text("RIEPILOGO ECONOMICO GENERALE CONSUNTIVO", 18, startY + 6.5);
             doc.line(18, startY + 8.5, 192, startY + 8.5);
 
+            let yRiga = startY + 14;
             doc.setFont("helvetica", "normal");
             doc.setFontSize(9);
-            doc.text(`• Totale Manodopera effettiva (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 18, startY + 14);
+            doc.text(`• Totale Manodopera effettiva (${dati.totaleOreManodopera.toFixed(2)} h × ${formatValuta(dati.tariffaManodopera)}/h):`, 18, yRiga);
             doc.setFont("helvetica", "bold");
-            doc.text(formatValuta(dati.costoTotaleManodopera), 192, startY + 14, { align: 'right' });
+            doc.text(formatValuta(dati.costoTotaleManodopera), 192, yRiga, { align: 'right' });
+            yRiga += 5.5;
 
             doc.setFont("helvetica", "normal");
-            doc.text(`• Totale Automezzi (${dati.totaleOreMezzi.toFixed(2)} h × ${formatValuta(dati.tariffaMezzi)}/h):`, 18, startY + 19.5);
+            doc.text(`• Totale Automezzi (${dati.totaleOreMezzi.toFixed(2)} h × ${formatValuta(dati.tariffaMezzi)}/h):`, 18, yRiga);
             doc.setFont("helvetica", "bold");
-            doc.text(formatValuta(dati.costoTotaleMezzi), 192, startY + 19.5, { align: 'right' });
+            doc.text(formatValuta(dati.costoTotaleMezzi), 192, yRiga, { align: 'right' });
+            yRiga += 5.5;
 
             doc.setFont("helvetica", "normal");
-            doc.text(`• Totale Materiali (${dati.documentiMateriali.length} documenti DDT/Fatture):`, 18, startY + 25);
+            doc.text(`• Totale Materiali (${dati.documentiMateriali.length} documenti DDT/Fatture):`, 18, yRiga);
             doc.setFont("helvetica", "bold");
-            doc.text(formatValuta(dati.totaleSpesaMateriali), 192, startY + 25, { align: 'right' });
+            doc.text(formatValuta(dati.totaleSpesaMateriali), 192, yRiga, { align: 'right' });
+            yRiga += 5.8;
 
-            startY += 28;
+            // Inserisce Subtotale Costi Diretti, Spese Generali e/o Utile d'Impresa SOLO se selezionati
+            if (haMaggiorazioni) {
+                doc.setDrawColor(203, 213, 225);
+                doc.line(18, yRiga - 2, 192, yRiga - 2);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(30, 41, 59);
+                doc.text("• Totale Costi Diretti:", 18, yRiga + 1.5);
+                doc.text(formatValuta(dati.subtotaleCostiDiretti), 192, yRiga + 1.5, { align: 'right' });
+                yRiga += 6.2;
+            }
+
+            if (dati.applicaSpeseGenerali) {
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(49, 46, 129);
+                doc.text(`• Spese Generali (${dati.percSpeseGenerali}%):`, 18, yRiga);
+                doc.setFont("helvetica", "bold");
+                doc.text(formatValuta(dati.importoSpeseGenerali), 192, yRiga, { align: 'right' });
+                yRiga += 5.5;
+            }
+
+            if (dati.applicaUtileImpresa) {
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(88, 28, 135);
+                doc.text(`• Utile d'Impresa (${dati.percUtileImpresa}%):`, 18, yRiga);
+                doc.setFont("helvetica", "bold");
+                doc.text(formatValuta(dati.importoUtileImpresa), 192, yRiga, { align: 'right' });
+                yRiga += 5.5;
+            }
+
+            startY += altezzaBoxRiepilogo;
             doc.setFillColor(30, 41, 59);
             doc.rect(14, startY, 182, 9.5, 'F');
             doc.setTextColor(255, 255, 255);
